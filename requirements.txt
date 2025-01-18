@@ -1,0 +1,4 @@
+fastapi
+asyncio
+uvicorn[standard]
+python-magic
