@@ -33,9 +33,17 @@ class Language(str, enum.Enum):
 AST_BUILDER_URL = {
     Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
     Language.TS: 'http://127.0.0.1:8008/to/native/ts/ast',
-    Language.PHP: 'http://127.0.0.1:8001/to/php/ast',
-    Language.PY: 'http://127.0.0.1:8006/to/native/py/ast',
+    Language.PHP: 'http://127.0.0.1:5000/to/php/ast',
+    Language.PY: 'http://frontpy:5000/to/native/py/ast',
     Language.RB: 'http://127.0.0.1:8007/to/native/cruby/ast'
+}
+
+DHSCANNER_AST_BUILDER_URL = {
+    Language.JS: 'http://parsers:3000/from/js/to/dhscanner/ast',
+    Language.TS: 'http://parsers:3000/from/ts/to/dhscanner/ast',
+    Language.PHP: 'http://parsers:3000/from/php/to/dhscanner/ast',
+    Language.PY: 'http://parsers:3000/from/py/to/dhscanner/ast',
+    Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
 }
 
 def scan_this_file(filename: str, language: Language) -> bool:
@@ -79,6 +87,23 @@ def parse_code(files: dict[Language, list[str]]):
             add_ast(filename, language, asts)
 
     return asts
+
+def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
+
+    content = { 'filename': filename, 'content': code}
+    response = requests.post(DHSCANNER_AST_BUILDER_URL[language], json=content)
+    asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
+
+
+def parse_language_asts(language_asts):
+
+    dhscanner_asts = collections.defaultdict(list)
+
+    for language, asts in language_asts.items():
+        for ast in asts:
+            add_dhscanner_ast(ast['filename'], language, ast['actual_ast'], dhscanner_asts)
+
+    return dhscanner_asts
 
 @app.post('/scan')
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
