@@ -4,9 +4,11 @@ import json
 import enum
 import magic
 import typing
+import tarfile
 import asyncio
 import logging
 import fastapi
+import requests
 import collections
 
 
@@ -28,6 +30,17 @@ class Language(str, enum.Enum):
     PY = 'py'
     RB = 'rb'
 
+AST_BUILDER_URL = {
+    Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
+    Language.TS: 'http://127.0.0.1:8008/to/native/ts/ast',
+    Language.PHP: 'http://127.0.0.1:8001/to/php/ast',
+    Language.PY: 'http://127.0.0.1:8006/to/native/py/ast',
+    Language.RB: 'http://127.0.0.1:8007/to/native/cruby/ast'
+}
+
+def scan_this_file(filename: str, language: Language) -> bool:
+    return True
+
 def collect_sources(workdir: str, language: Language, files: dict[Language,list[str]]) -> None:
 
     filenames = glob.glob(f'{workdir}/**/*.{language.value}', recursive=True)
@@ -43,6 +56,29 @@ def collect_all_sources(workdir: str):
         collect_sources(workdir, language, files)
 
     return files
+
+def read_single_file(filename: str):
+
+    with open(filename) as fl:
+        code = fl.read()
+
+    return { 'source': ('source', code) }
+
+def add_ast(filename: str, language: Language, asts: dict) -> None:
+
+    one_file_at_a_time = read_single_file(filename)
+    response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
+    asts[language].append({ 'filename': filename, 'actual_ast': response.text })
+
+def parse_code(files: dict[Language, list[str]]):
+
+    asts = collections.defaultdict(list)
+
+    for language, filenames in files.items():
+        for filename in filenames:
+            add_ast(filename, language, asts)
+
+    return asts
 
 @app.post('/scan')
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
@@ -79,7 +115,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             f.write(chunk)
 
     workdir = tempfile.mkdtemp()
-    tarfile.open(name=filename).extractall(path=workdir, filter='tar').close()
+    t = tarfile.open(name=filename)
+    t.extractall(path=workdir, filter='tar')
+    t.close()
 
     layers = glob.glob(f'{workdir}/**/*', recursive=True)
     for layer in layers:
@@ -89,7 +127,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             layertar.extractall(path=dirname, filter='tar')
             layertar.close()
 
-    files = collect_all_sources(args)
+    files = collect_all_sources(workdir)
     language_asts = parse_code(files)
     dhscanner_asts = asyncio.run(parse_language_asts(language_asts))
 
