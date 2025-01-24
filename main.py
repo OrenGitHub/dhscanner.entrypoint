@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import json
 import enum
@@ -45,6 +46,17 @@ DHSCANNER_AST_BUILDER_URL = {
     Language.PY: 'http://parsers:3000/from/py/to/dhscanner/ast',
     Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
 }
+
+TO_CODEGEN_URL = 'http://codegen:3000/codegen'
+TO_KBGEN_URL = 'http://kbgen:3000/kbgen'
+TO_QUERY_ENGINE_URL = 'http://queryengine:5000/check'
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s]: %(message)s",
+    datefmt="%d/%m/%Y ( %H:%M:%S )",
+    stream=sys.stdout
+)
 
 def scan_this_file(filename: str, language: Language) -> bool:
     return True
@@ -105,6 +117,29 @@ def parse_language_asts(language_asts):
 
     return dhscanner_asts
 
+def codegen(dhscanner_asts):
+
+    content = { 'asts': dhscanner_asts }
+    response = requests.post(TO_CODEGEN_URL, json=content)
+    return { 'content': response.text }
+
+
+def kbgen(callables):
+
+    response = requests.post(TO_KBGEN_URL, json=callables)
+    return { 'content': response.text }
+
+def query_engine(kb_filename: str, queries_filename: str):
+
+    kb_and_queries = {
+        'kb': ('kb', open(kb_filename)),
+        'queries': ('queries', open(queries_filename)),
+    }
+
+    url = f'{TO_QUERY_ENGINE_URL}'
+    response = requests.post(url, files=kb_and_queries)
+    logging.info(f'[  scan  ] .............. : {response.text}')
+
 @app.post('/scan')
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
 
@@ -114,11 +149,15 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             detail='Missing authorization header'
         )
 
+    logging.info('[ step 0 ] authorization present  : yes 😃 ')
+
     if not authorization.startswith('Bearer '):
         raise fastapi.HTTPException(
             status_code=401,
             detail='Invalid authorization header'
         )
+
+    logging.info('[ step 1 ] bearer token exists .. : yes 😃 ')
 
     token = authorization[len('Bearer '):]
     if token != EXPECTED_TOKEN:
@@ -127,6 +166,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             detail="Invalid Bearer token"
         )
 
+    logging.info('[ step 1 ] bearer token is valid  : yes 😃 ')
+
     content_type = request.headers.get("content-type")
     if content_type != "application/octet-stream":
         raise HTTPException(
@@ -134,10 +175,23 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             detail="Invalid content type"
         )
 
+    logging.info('[ step 1 ] streamed tar file .... : yes 😃 ')
+
     with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as f:
         filename = f.name
         async for chunk in request.stream():
             f.write(chunk)
+
+    logging.info('[ step 1 ] completed tar file ... : yes 😃 ')
+
+    repo_name = request.headers.get('X-Directory-Name')
+    if repo_name is None:
+        raise HTTPException(
+            status_code=400,
+            detail='repo name (via X-Directory-Name header) is missing'
+        )
+
+    logging.info('[ step 1 ] repo name received ... : yes 😃 ')
 
     workdir = tempfile.mkdtemp()
     t = tarfile.open(name=filename)
@@ -154,10 +208,12 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     files = collect_all_sources(workdir)
     language_asts = parse_code(files)
-    dhscanner_asts = asyncio.run(parse_language_asts(language_asts))
+    dhscanner_asts = parse_language_asts(language_asts)
 
+    valid_dhscanner_asts: dict = collections.defaultdict(list)
     total_num_files: dict[str,int] = collections.defaultdict(int)
     num_parse_errors: dict[str,int] = collections.defaultdict(int)
+
     for language, asts in dhscanner_asts.items():
         for ast in asts:
             try:
@@ -175,16 +231,13 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             except ValueError:
                 continue
 
-            # file succeeded
-            #if actual_ast['filename'].endswith('version_helper.rb'):
-            #    logging.info(json.dumps(actual_ast, indent=4))
             valid_dhscanner_asts[language].append(actual_ast)
             total_num_files[language] += 1
 
     for language in dhscanner_asts.keys():
         n = total_num_files[language]
         errors = num_parse_errors[language]
-        logging.info(f'[ step 2 ] dhscanner ast ( {language} )   : {n - errors}/{n}')
+        logging.info(f'[ step 2 ] dhscanner ast ( {language.value} )   : {n - errors}/{n}')
 
     bitcodes = codegen(
         valid_dhscanner_asts['js'] +
@@ -215,14 +268,17 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         logging.warning(kb['content'])
         return
 
-    with open('kb.pl', 'w') as fl:
+    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+        kb_filename = f.name
         dummy_classloc = 'not_a_real_loc'
         dummy_classname = "'not_a_real_classnem'"
-        fl.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
-        fl.write('\n'.join(sorted(set(content))))
-        fl.write('\n')
+        f.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
+        f.write('\n'.join(sorted(set(content))))
+        f.write('\n')
 
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
-    logging.info('[  cves  ] ...................... : starting 🙏 ')
+    logging.info('[  scan  ] ...................... : starting 🙏 ')
 
-    query_engine('kb.pl', 'queries.pl')
+    queries_filename = os.path.join(workdir, repo_name, '.dhscanner.queries')
+    query_engine(kb_filename, queries_filename)
+
