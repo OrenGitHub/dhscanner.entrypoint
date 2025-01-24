@@ -22,7 +22,7 @@ import tempfile
 app = fastapi.FastAPI()
 
 # Expected Bearer token (stored securely in an environment variable)
-EXPECTED_TOKEN = os.getenv("BEARER_TOKEN", "my-secure-token")
+EXPECTED_TOKEN = os.getenv("APPROVED_BEARER_TOKEN_1", "my-secure-token")
 
 class Language(str, enum.Enum):
     JS = 'js'
