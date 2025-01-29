@@ -82,7 +82,7 @@ def read_single_file(filename: str):
     with open(filename) as fl:
         code = fl.read()
 
-    return { 'source': ('source', code) }
+    return { 'source': (filename, code) }
 
 def add_ast(filename: str, language: Language, asts: dict) -> None:
 
@@ -105,7 +105,6 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     content = { 'filename': filename, 'content': code}
     response = requests.post(DHSCANNER_AST_BUILDER_URL[language], json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
-
 
 def parse_language_asts(language_asts):
 
@@ -223,8 +222,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    if language == 'py':
-                        if filename.endswith('workdir/pghoard/pghoard/transfer.py'):
+                    if language == Language.JS:
+                        if filename.endswith('frappe/frappe/templates/includes/list/list.js'):
                             logging.info(f'FAILED({message}): {filename}')
                     continue
 
