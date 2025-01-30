@@ -58,22 +58,25 @@ logging.basicConfig(
     stream=sys.stdout
 )
 
-def scan_this_file(filename: str, language: Language) -> bool:
+def scan_this_file(filename: str, language: Language, ignore_testing_code: bool = False) -> bool:
+    if ignore_testing_code and 'test' in filename:
+        return False
+
     return True
 
-def collect_sources(workdir: str, language: Language, files: dict[Language,list[str]]) -> None:
+def collect_sources(workdir: str, language: Language, files: dict[Language,list[str]], ignore_testing_code: bool) -> None:
 
     filenames = glob.glob(f'{workdir}/**/*.{language.value}', recursive=True)
     for filename in filenames:
         if os.path.isfile(filename):
-            if scan_this_file(filename, language):
+            if scan_this_file(filename, language, ignore_testing_code):
                 files[language].append(filename)
 
-def collect_all_sources(workdir: str):
+def collect_all_sources(workdir: str, ignore_testing_code: bool):
 
     files = collections.defaultdict(list)
     for language in Language:
-        collect_sources(workdir, language, files)
+        collect_sources(workdir, language, files, ignore_testing_code)
 
     return files
 
@@ -205,7 +208,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             layertar.extractall(path=dirname, filter='tar')
             layertar.close()
 
-    files = collect_all_sources(workdir)
+    ignore_testing_code_str = request.headers.get('Ignore-Testing-Code', 'false').lower()
+    ignore_testing_code = (ignore_testing_code_str in ['yes', 'true'])
+
+    files = collect_all_sources(workdir, ignore_testing_code)
     language_asts = parse_code(files)
     dhscanner_asts = parse_language_asts(language_asts)
 
