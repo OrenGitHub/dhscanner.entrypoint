@@ -1,4 +1,7 @@
 FROM python:3.12-slim
+ARG TZ
+ENV TZ=${TZ}
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ARG APPROVED_BEARER_TOKEN_1
 ENV APPROVED_BEARER_TOKEN_1=${APPROVED_BEARER_TOKEN_1}
 ENV DEBIAN_FRONTEND=noninteractive
