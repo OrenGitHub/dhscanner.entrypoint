@@ -5,6 +5,7 @@ import json
 import enum
 import magic
 import typing
+import shutil
 import tarfile
 import asyncio
 import logging
@@ -151,7 +152,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             detail='Missing authorization header'
         )
 
-    logging.info('[ step 0 ] authorization present  : yes 😃 ')
+    logging.info('[ step 1 ] authorization present  : yes 😃 ')
 
     if not authorization.startswith('Bearer '):
         raise fastapi.HTTPException(
@@ -179,13 +180,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 1 ] streamed tar file .... : yes 😃 ')
 
-    with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as f:
-        filename = f.name
-        async for chunk in request.stream():
-            f.write(chunk)
-
-    logging.info('[ step 1 ] completed tar file ... : yes 😃 ')
-
     repo_name = request.headers.get('X-Directory-Name')
     if repo_name is None:
         raise HTTPException(
@@ -195,11 +189,26 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 1 ] repo name received ... : yes 😃 ')
 
-    workdir = tempfile.mkdtemp()
-    t = tarfile.open(name=filename)
-    t.extractall(path=workdir, filter='tar')
-    t.close()
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as f:
+        tar_filename = f.name
+        async for chunk in request.stream():
+            f.write(chunk)
 
+    logging.info('[ step 1 ] completed tar file ... : yes 😃 ')
+
+    workdir = tempfile.mkdtemp()
+    with tarfile.open(name=tar_filename) as tar:
+        tar.extractall(path=workdir, filter='tar')
+
+    logging.info('[ step 1 ] extracted tar file ... : yes 😃 ')
+
+    os.remove(tar_filename)
+
+    logging.info('[ step 1 ] deleted tar file ..... : yes 😃 ')
+
+    # the following code block handles docker images
+    # for simple file systems like a tar-ed repo sent from CI/CD
+    # this entire block does nothing ...
     layers = glob.glob(f'{workdir}/**/*', recursive=True)
     for layer in layers:
         if os.path.isfile(layer) and 'POSIX tar archive' in magic.from_file(layer):
@@ -213,6 +222,23 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     files = collect_all_sources(workdir, ignore_testing_code)
     language_asts = parse_code(files)
+
+    logging.info('[ step 2 ] native asts .......... : finished 😃 ')
+
+    # before the entire working directory is deleted,
+    # make sure to copy the queries file
+    with tempfile.NamedTemporaryFile(delete=False) as queries_file:
+        queries_filename = queries_file.name
+        dhscanner_queries = os.path.join(workdir, repo_name, '.dhscanner.queries')
+        shutil.copy(dhscanner_queries, queries_filename)
+
+    # actual source files are no longer needed
+    # everything is inside the language asts
+    # .dhscanner.queries was copied to another location
+    shutil.rmtree(workdir)
+
+    logging.info('[ step 2 ] deleting all src files : finished 😃 ')
+
     dhscanner_asts = parse_language_asts(language_asts)
 
     valid_dhscanner_asts: dict = collections.defaultdict(list)
@@ -228,9 +254,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    if language == Language.JS:
-                        if filename.endswith('frappe/frappe/templates/includes/list/list.js'):
-                            logging.info(f'FAILED({message}): {filename}')
+                    #if language == Language.JS:
+                    #    if filename.endswith('frappe/frappe/templates/includes/list/list.js'):
+                    #        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -284,6 +310,4 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
     logging.info('[  scan  ] ...................... : starting 🙏 ')
 
-    queries_filename = os.path.join(workdir, repo_name, '.dhscanner.queries')
     query_engine(kb_filename, queries_filename)
-
