@@ -50,10 +50,10 @@ class Language(str, enum.Enum):
 
 AST_BUILDER_URL = {
     Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
-    Language.TS: 'http://127.0.0.1:8008/to/native/ts/ast',
-    Language.PHP: 'http://127.0.0.1:5000/to/php/ast',
+    Language.TS: 'http://frontts:8008/to/native/ts/ast',
+    Language.PHP: 'http://frontphp:5000/to/php/ast',
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
-    Language.RB: 'http://127.0.0.1:8007/to/native/cruby/ast'
+    Language.RB: 'http://frontrb:8007/to/native/cruby/ast'
 }
 
 DHSCANNER_AST_BUILDER_URL = {
