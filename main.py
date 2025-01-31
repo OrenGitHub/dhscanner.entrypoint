@@ -22,7 +22,7 @@ app = fastapi.FastAPI()
 
 # every client must have an approved bearer token to access
 # locally deployed webservers are supported - no need for bearer tokens
-EXPECTED_TOKEN = os.getenv('APPROVED_BEARER_TOKEN_1', '')
+EXPECTED_TOKEN = os.getenv('APPROVED_BEARER_TOKEN_0', '')
 
 # every client must have an approved url to access
 # (one url per client, which is also rate limited)
