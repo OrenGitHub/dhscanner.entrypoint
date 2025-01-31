@@ -10,20 +10,36 @@ import tarfile
 import asyncio
 import logging
 import fastapi
+import slowapi
+import tempfile
 import requests
 import collections
 
-
 from fastapi.responses import JSONResponse
 
-# the entire repo is tar-ed and streamed to the endpoint
-# the queries are tar-ed as well as a .dhscanner file
-import tempfile
 
 app = fastapi.FastAPI()
 
-# Expected Bearer token (stored securely in an environment variable)
-EXPECTED_TOKEN = os.getenv("APPROVED_BEARER_TOKEN_1", "my-secure-token")
+# every client must have an approved bearer token to access
+# locally deployed webservers are supported - no need for bearer tokens
+EXPECTED_TOKEN = os.getenv('APPROVED_BEARER_TOKEN_1', '')
+
+# every client must have an approved url to access
+# (one url per client, which is also rate limited)
+# locally deployed webservers are supported - no need for approved urls
+NUM_APPROVED_URLS = os.getenv('NUM_APPROVED_URLS', '1')
+APPROVED_URLS = [os.getenv(f'APPROVED_URL_{i}', 'scan') for i in range(int(NUM_APPROVED_URLS))]
+
+limiter = slowapi.Limiter(key_func=lambda request: request.client.host)
+
+# generate as many request handlers as needed
+# each request handler listens to one approved url
+for approved_url in APPROVED_URLS:
+
+    @app.post(f'/{approved_url}')
+    @limiter.limit('60/minute')
+    async def entrypoint(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
+        return await scan(request, authorization)
 
 class Language(str, enum.Enum):
     JS = 'js'
@@ -142,8 +158,8 @@ def query_engine(kb_filename: str, queries_filename: str):
     url = f'{TO_QUERY_ENGINE_URL}'
     response = requests.post(url, files=kb_and_queries)
     logging.info(f'[  scan  ] .............. : {response.text}')
+    return { 'message': response.text }
 
-@app.post('/scan')
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
 
     if authorization is None:
@@ -308,6 +324,12 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         f.write('\n')
 
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
-    logging.info('[  scan  ] ...................... : starting 🙏 ')
+    logging.info('[ step 6 ] query engine ......... : starting 🙏 ')
 
-    query_engine(kb_filename, queries_filename)
+    result = query_engine(kb_filename, queries_filename)
+
+    logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
+
+    os.remove(queries_filename)
+
+    return result

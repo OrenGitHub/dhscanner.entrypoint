@@ -3,3 +3,4 @@ asyncio
 uvicorn[standard]
 python-magic
 requests
+slowapi
