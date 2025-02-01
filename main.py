@@ -64,6 +64,8 @@ DHSCANNER_AST_BUILDER_URL = {
     Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
 }
 
+CSRF_TOKEN = 'http://frontphp:5000/csrf_token'
+
 TO_CODEGEN_URL = 'http://codegen:3000/codegen'
 TO_KBGEN_URL = 'http://kbgen:3000/kbgen'
 TO_QUERY_ENGINE_URL = 'http://queryengine:5000/check'
@@ -104,6 +106,35 @@ def read_single_file(filename: str):
 
     return { 'source': (filename, code) }
 
+# Laravel has a built-in csrf token demand
+# There are other options too, but currently
+# I'm sticking to Laravel ... this means that all
+# the php files should be added using the same session
+def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
+
+    session = requests.Session()
+    response = session.get(CSRF_TOKEN)
+    token = response.text
+    cookies = session.cookies
+    headers = { 'X-CSRF-TOKEN': token }
+
+    filenames = files[Language.PHP]
+    for filename in filenames:
+        one_file_at_a_time = read_single_file(filename)
+        response = session.post(
+            AST_BUILDER_URL[Language.PHP],
+            files=one_file_at_a_time,
+            headers=headers,
+            cookies=cookies
+        )
+        asts[Language.PHP].append({
+            'filename': filename,
+            'actual_ast': response.text
+        })
+
+        if filename.endswith('handesk/app/Http/Controllers/Api/TicketsController.php'):
+            logging.info(response.text)
+
 def add_ast(filename: str, language: Language, asts: dict) -> None:
 
     one_file_at_a_time = read_single_file(filename)
@@ -115,8 +146,14 @@ def parse_code(files: dict[Language, list[str]]):
     asts = collections.defaultdict(list)
 
     for language, filenames in files.items():
-        for filename in filenames:
-            add_ast(filename, language, asts)
+        if language != Language.PHP:
+            for filename in filenames:
+                add_ast(filename, language, asts)
+
+    # separately because php chosen webserver
+    # has a more complex sessio mechanism
+    # see more details inside the function
+    add_php_asts(files, asts)
 
     return asts
 
@@ -168,7 +205,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             detail='Missing authorization header'
         )
 
-    logging.info('[ step 1 ] authorization present  : yes 😃 ')
+    logging.info('[ step 1 ] relevant headers ....  : yes 😃 ')
 
     if not authorization.startswith('Bearer '):
         raise fastapi.HTTPException(
@@ -237,6 +274,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     ignore_testing_code = (ignore_testing_code_str in ['yes', 'true'])
 
     files = collect_all_sources(workdir, ignore_testing_code)
+
+    logging.info('[ step 2 ] native asts .......... : started 😃 ')
+
     language_asts = parse_code(files)
 
     logging.info('[ step 2 ] native asts .......... : finished 😃 ')
@@ -270,9 +310,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    #if language == Language.JS:
-                    #    if filename.endswith('frappe/frappe/templates/includes/list/list.js'):
-                    #        logging.info(f'FAILED({message}): {filename}')
+                    if language == Language.PHP:
+                        if filename.endswith('handesk/app/Http/Controllers/Api/TicketsController.php'):
+                            logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -304,6 +344,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         logging.info('[ step 3 ] code gen ............. : failed 😬 ')
         logging.info(content)
         return
+
+    logging.info('[ step 4 ] knowledge base gen ... : started 😃 ')
 
     kb = kbgen(bitcode_as_json)
 
