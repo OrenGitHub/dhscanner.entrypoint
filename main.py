@@ -132,8 +132,8 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             'actual_ast': response.text
         })
 
-        if filename.endswith('handesk/app/Http/Controllers/Api/TicketsController.php'):
-            logging.info(response.text)
+        #if filename.endswith('handesk/app/Http/Controllers/Auth/ForgotPasswordController.php'):
+        #    logging.info(response.text)
 
 def add_ast(filename: str, language: Language, asts: dict) -> None:
 
@@ -310,9 +310,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    if language == Language.PHP:
-                        if filename.endswith('handesk/app/Http/Controllers/Api/TicketsController.php'):
-                            logging.info(f'FAILED({message}): {filename}')
+                    #if language == Language.PHP:
+                    #    if filename.endswith('handesk/app/Http/Controllers/Auth/ForgotPasswordController.php'):
+                    #        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
