@@ -13,7 +13,9 @@ import fastapi
 import slowapi
 import tempfile
 import requests
+import dataclasses
 import collections
+import generate_sarif
 
 from fastapi.responses import JSONResponse
 
@@ -310,9 +312,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    #if language == Language.PHP:
+                    if language == Language.PHP:
                     #    if filename.endswith('handesk/app/Http/Controllers/Auth/ForgotPasswordController.php'):
-                    #        logging.info(f'FAILED({message}): {filename}')
+                        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -374,4 +376,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     os.remove(queries_filename)
 
-    return result
+    sarif = generate_sarif.run(
+        'frappe/utils/redis_wrapper.py',
+        'reflected XSS'
+    )
+
+    return dataclasses.asdict(sarif)
