@@ -7,7 +7,6 @@ import magic
 import typing
 import shutil
 import tarfile
-import asyncio
 import logging
 import fastapi
 import slowapi
@@ -16,8 +15,6 @@ import requests
 import dataclasses
 import collections
 import generate_sarif
-
-from fastapi.responses import JSONResponse
 
 
 app = fastapi.FastAPI()
@@ -36,6 +33,7 @@ limiter = slowapi.Limiter(key_func=lambda request: request.client.host)
 
 # generate as many request handlers as needed
 # each request handler listens to one approved url
+# pylint: disable=cell-var-from-loop
 for approved_url in APPROVED_URLS:
 
     @app.post(f'/{approved_url}')
@@ -79,6 +77,11 @@ logging.basicConfig(
     stream=sys.stdout
 )
 
+# TODO: adjust other reasons for exclusion
+# the reasons might depend on the language
+# (like the third party directory name: node_module for javascript,
+# site-packages for python or vendor/bundle for ruby etc.)
+# pylint: disable=unused-argument
 def scan_this_file(filename: str, language: Language, ignore_testing_code: bool = False) -> bool:
     if ignore_testing_code and 'test' in filename:
         return False
@@ -95,7 +98,7 @@ def collect_sources(workdir: str, language: Language, files: dict[Language,list[
 
 def collect_all_sources(workdir: str, ignore_testing_code: bool):
 
-    files = collections.defaultdict(list)
+    files = collections.defaultdict(list) # type: ignore[var-annotated]
     for language in Language:
         collect_sources(workdir, language, files, ignore_testing_code)
 
@@ -103,7 +106,7 @@ def collect_all_sources(workdir: str, ignore_testing_code: bool):
 
 def read_single_file(filename: str):
 
-    with open(filename) as fl:
+    with open(filename, 'r', encoding='utf-8') as fl:
         code = fl.read()
 
     return { 'source': (filename, code) }
@@ -145,7 +148,7 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
 
 def parse_code(files: dict[Language, list[str]]):
 
-    asts = collections.defaultdict(list)
+    asts = collections.defaultdict(list) # type: ignore[var-annotated]
 
     for language, filenames in files.items():
         if language != Language.PHP:
@@ -187,11 +190,12 @@ def kbgen(callables):
     response = requests.post(TO_KBGEN_URL, json=callables)
     return { 'content': response.text }
 
+# pylint: disable=consider-using-with,logging-fstring-interpolation
 def query_engine(kb_filename: str, queries_filename: str):
 
     kb_and_queries = {
-        'kb': ('kb', open(kb_filename)),
-        'queries': ('queries', open(queries_filename)),
+        'kb': ('kb', open(kb_filename, encoding='utf-8')),
+        'queries': ('queries', open(queries_filename, encoding='utf-8')),
     }
 
     url = f'{TO_QUERY_ENGINE_URL}'
@@ -199,6 +203,7 @@ def query_engine(kb_filename: str, queries_filename: str):
     logging.info(f'[  scan  ] .............. : {response.text}')
     return { 'message': response.text }
 
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
 
     if authorization is None:
@@ -228,7 +233,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     content_type = request.headers.get("content-type")
     if content_type != "application/octet-stream":
-        raise HTTPException(
+        raise fastapi.HTTPException(
             status_code=400,
             detail="Invalid content type"
         )
@@ -237,7 +242,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     repo_name = request.headers.get('X-Directory-Name')
     if repo_name is None:
-        raise HTTPException(
+        raise fastapi.HTTPException(
             status_code=400,
             detail='repo name (via X-Directory-Name header) is missing'
         )
@@ -370,6 +375,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
     logging.info('[ step 6 ] query engine ......... : starting 🙏 ')
 
+    # TODO: the result will soon find its way to
+    # the actual sarif output. until then:
+    # pylint: disable=unused-variable
     result = query_engine(kb_filename, queries_filename)
 
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')

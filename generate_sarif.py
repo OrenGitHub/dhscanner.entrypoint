@@ -13,15 +13,15 @@ class SarifMessage:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Region:
 
-     startLine: int
-     endLine: int
-     startColumn: int
-     endColumn: int
+    startLine: int
+    endLine: int
+    startColumn: int
+    endColumn: int
 
 @dataclasses.dataclass(frozen=True)
 class ArtifactLocation:
 
-     uri: str
+    uri: str
 
 @dataclasses.dataclass(frozen=True)
 class PhysicalLocation:

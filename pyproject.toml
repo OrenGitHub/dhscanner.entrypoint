@@ -1,0 +1,15 @@
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "fixme",
+    "invalid-name",
+    "import-error",
+    "line-too-long",
+    "missing-timeout",
+    "wrong-import-order",
+    "missing-class-docstring",
+    "missing-module-docstring",
+    "missing-function-docstring"
+]
+
+[tool.mypy]
+ignore_missing_imports = true
