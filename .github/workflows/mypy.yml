@@ -25,4 +25,4 @@ jobs:
         pip install -r requirements.txt
     - name: Inspect the code
       run: |
-        mypy --install-types $(git ls-files '*.py')
+        mypy --install-types --non-interactive $(git ls-files '*.py')
