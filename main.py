@@ -137,8 +137,8 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             'actual_ast': response.text
         })
 
-        #if filename.endswith('handesk/app/Http/Controllers/Auth/ForgotPasswordController.php'):
-        #    logging.info(response.text)
+        if filename.endswith('handesk/app/Ticket.php'):
+            logging.info(response.text)
 
 def add_ast(filename: str, language: Language, asts: dict) -> None:
 
@@ -282,7 +282,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     files = collect_all_sources(workdir, ignore_testing_code)
 
-    logging.info('[ step 2 ] native asts .......... : started 😃 ')
+    logging.info('[ step 2 ] native asts .......... : started  😃 ')
 
     language_asts = parse_code(files)
 
@@ -318,8 +318,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     filename = actual_ast['filename']
                     message = actual_ast['message']
                     if language == Language.PHP:
-                    #    if filename.endswith('handesk/app/Http/Controllers/Auth/ForgotPasswordController.php'):
-                        logging.info(f'FAILED({message}): {filename}')
+                        if filename.endswith('handesk/app/Providers/AppServiceProvider.php'):
+                            logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -352,7 +352,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         logging.info(content)
         return
 
-    logging.info('[ step 4 ] knowledge base gen ... : started 😃 ')
+    logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
     kb = kbgen(bitcode_as_json)
 
