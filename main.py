@@ -47,13 +47,15 @@ class Language(str, enum.Enum):
     PHP = 'php'
     PY = 'py'
     RB = 'rb'
+    BLADE_PHP = 'blade.php'
 
 AST_BUILDER_URL = {
     Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
     Language.TS: 'http://frontts:8008/to/native/ts/ast',
     Language.PHP: 'http://frontphp:5000/to/php/ast',
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
-    Language.RB: 'http://frontrb:8007/to/native/cruby/ast'
+    Language.RB: 'http://frontrb:8007/to/native/cruby/ast',
+    Language.BLADE_PHP: 'http://frontphp:5000/to/php/code'
 }
 
 DHSCANNER_AST_BUILDER_URL = {
@@ -125,10 +127,22 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
 
     filenames = files[Language.PHP]
     for filename in filenames:
-        one_file_at_a_time = read_single_file(filename)
+        if filename in files[Language.BLADE_PHP]:
+            just_one_blade_php_file = read_single_file(filename)
+            response = session.post(
+                AST_BUILDER_URL[Language.BLADE_PHP],
+                files=just_one_blade_php_file,
+                headers=headers,
+                cookies=cookies
+            )
+            php_source_code = { 'source': (filename, response.text) }
+        else:
+            php_source_code = read_single_file(filename)
+
+        # from here on, plain php code
         response = session.post(
             AST_BUILDER_URL[Language.PHP],
-            files=one_file_at_a_time,
+            files=php_source_code,
             headers=headers,
             cookies=cookies
         )
@@ -151,13 +165,14 @@ def parse_code(files: dict[Language, list[str]]):
     asts = collections.defaultdict(list) # type: ignore[var-annotated]
 
     for language, filenames in files.items():
-        if language != Language.PHP:
+        if language not in [Language.PHP, Language.BLADE_PHP]:
             for filename in filenames:
                 add_ast(filename, language, asts)
 
     # separately because php chosen webserver
     # has a more complex sessio mechanism
     # see more details inside the function
+    # it handles both plain php files and blade.php files
     add_php_asts(files, asts)
 
     return asts
