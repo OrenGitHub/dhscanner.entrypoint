@@ -160,6 +160,9 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
+    if filename.endswith('sickchill/views/index.py'):
+        logging.info(response.text)
+
 def parse_code(files: dict[Language, list[str]]):
 
     asts = collections.defaultdict(list) # type: ignore[var-annotated]
@@ -180,8 +183,12 @@ def parse_code(files: dict[Language, list[str]]):
 def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
 
     content = { 'filename': filename, 'content': code}
-    response = requests.post(DHSCANNER_AST_BUILDER_URL[language], json=content)
+    url = DHSCANNER_AST_BUILDER_URL[language]
+    response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
+
+    if filename.endswith('sickchill/views/index.py'):
+        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -203,7 +210,7 @@ def codegen(dhscanner_asts):
 def kbgen(callables):
 
     response = requests.post(TO_KBGEN_URL, json=callables)
-    return { 'content': response.text }
+    return response.text
 
 # pylint: disable=consider-using-with,logging-fstring-interpolation
 def query_engine(kb_filename: str, queries_filename: str):
@@ -319,7 +326,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     dhscanner_asts = parse_language_asts(language_asts)
 
-    valid_dhscanner_asts: dict = collections.defaultdict(list)
+    valid_dhscanner_asts = []
     total_num_files: dict[str,int] = collections.defaultdict(int)
     num_parse_errors: dict[str,int] = collections.defaultdict(int)
 
@@ -332,15 +339,15 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    if language == Language.PHP:
-                        if filename.endswith('handesk/app/Providers/AppServiceProvider.php'):
+                    if language == Language.PY:
+                        if filename.endswith('sickchill/views/index.py'):
                             logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
                 continue
 
-            valid_dhscanner_asts[language].append(actual_ast)
+            valid_dhscanner_asts.append(actual_ast)
             total_num_files[language] += 1
 
     for language in dhscanner_asts.keys():
@@ -348,12 +355,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         errors = num_parse_errors[language]
         logging.info(f'[ step 2 ] dhscanner ast ( {language.value} )   : {n - errors}/{n}')
 
-    bitcodes = codegen(
-        valid_dhscanner_asts['js'] +
-        valid_dhscanner_asts['py'] +
-        valid_dhscanner_asts['rb'] +
-        valid_dhscanner_asts['php']
-    )
+    bitcodes = codegen(valid_dhscanner_asts)
 
     logging.info('[ step 2 ] dhscanner asts ....... : finished 😃 ')
 
@@ -372,7 +374,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     kb = kbgen(bitcode_as_json)
 
     try:
-        content = json.loads(kb['content'])['content']
+        content = json.loads(kb)['content']
         logging.info('[ step 4 ] knowledge base gen ... : finished 😃 ')
     except json.JSONDecodeError:
         logging.warning('[ step 4 ] knowledge base gen ... : failed 😬 ')
