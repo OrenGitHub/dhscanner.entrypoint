@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import glob
 import json
@@ -160,8 +161,8 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('sickchill/views/index.py'):
-        logging.info(response.text)
+    #if filename.endswith('sickchill/sickchill/views/authentication.py'):
+    #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]):
 
@@ -187,8 +188,8 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    if filename.endswith('sickchill/views/index.py'):
-        logging.info(response.text)
+    #if filename.endswith('sickchill/sickchill/views/authentication.py'):
+    #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -222,8 +223,7 @@ def query_engine(kb_filename: str, queries_filename: str):
 
     url = f'{TO_QUERY_ENGINE_URL}'
     response = requests.post(url, files=kb_and_queries)
-    logging.info(f'[  scan  ] .............. : {response.text}')
-    return { 'message': response.text }
+    return response.text
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
@@ -339,9 +339,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                     total_num_files[language] += 1
                     filename = actual_ast['filename']
                     message = actual_ast['message']
-                    if language == Language.PY:
-                        if filename.endswith('sickchill/views/index.py'):
-                            logging.info(f'FAILED({message}): {filename}')
+                    #if language == Language.PY:
+                    #    if filename.endswith('sickchill/sickchill/views/authentication.py'):
+                    #        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -392,18 +392,33 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
     logging.info('[ step 6 ] query engine ......... : starting 🙏 ')
 
-    # TODO: the result will soon find its way to
-    # the actual sarif output. until then:
-    # pylint: disable=unused-variable
     result = query_engine(kb_filename, queries_filename)
+    os.remove(queries_filename)
 
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
 
-    os.remove(queries_filename)
+    pattern = r'q(\d+)\(\[[a-zA-Z0-9_,\(\)]*startloc_(\d+)_(\d+)_endloc_(\d+)_(\d+)\)\]\): yes'
+    region = generate_sarif.Region.make_default()
+    if match := re.search(pattern, result):
+        query_number = int(match.group(1))
+        lineStart = int(match.group(2))
+        colStart = int(match.group(3))
+        lineEnd = int(match.group(4))
+        colEnd = int(match.group(5))
+        region = generate_sarif.Region(
+            lineStart=lineStart,
+            lineEnd=lineEnd,
+            colStart=colStart,
+            colEnd=colEnd
+        )
 
     sarif = generate_sarif.run(
-        'frappe/utils/redis_wrapper.py',
-        'reflected XSS'
+        'repo_name',
+        'open redirect',
+        region
     )
+
+    logging.info('[ step 8 ] sarif response ....... : finished 😃 ')
+    logging.info('[ step 9 ] sending response now   :  🚀 ')
 
     return dataclasses.asdict(sarif)

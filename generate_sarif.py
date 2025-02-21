@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 
 @dataclasses.dataclass(frozen=True)
@@ -13,10 +15,19 @@ class SarifMessage:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Region:
 
-    startLine: int
-    endLine: int
-    startColumn: int
-    endColumn: int
+    lineStart: int
+    lineEnd: int
+    colStart: int
+    colEnd: int
+
+    @staticmethod
+    def make_default() -> Region:
+        return Region(
+            lineStart=0,
+            lineEnd=0,
+            colStart=0,
+            colEnd=0
+        )
 
 @dataclasses.dataclass(frozen=True)
 class ArtifactLocation:
@@ -57,15 +68,9 @@ class Sarif:
 
     runs: list[SarifRun]
 
-def run(filename: str, description: str) -> Sarif:
+def run(filename: str, description: str, region: Region) -> Sarif:
     driver = Driver('dhscanner')
     dhscanner = SarifTool(driver)
-    region = Region(
-        startLine=7,
-        endLine=9,
-        startColumn=511,
-        endColumn=589
-    )
     artifactLocation = ArtifactLocation(filename)
     physical_location = PhysicalLocation(artifactLocation, region)
     location = SarifLocation(physical_location)
