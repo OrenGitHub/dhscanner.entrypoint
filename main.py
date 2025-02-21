@@ -413,7 +413,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         )
 
     sarif = generate_sarif.run(
-        'repo_name',
+        repo_name,
         'open redirect',
         region
     )
