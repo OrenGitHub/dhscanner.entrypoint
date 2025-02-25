@@ -32,34 +32,37 @@ APPROVED_URLS = [os.getenv(f'APPROVED_URL_{i}', 'scan') for i in range(int(NUM_A
 
 limiter = slowapi.Limiter(key_func=lambda request: request.client.host)
 
-@app.get(f'/{approved_url}/healthcheck')
-@limiter.limit('60/minute')
-def healthcheck(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
-
-    if authorization is None:
-        raise fastapi.HTTPException(
-            status_code=401,
-            detail='Missing authorization header'
-        )
-
-    accept = request.headers.get("accept").casefold()
-    if accept != "application/json":
-        raise fastapi.HTTPException(
-            status_code=406,
-            detail="Invalid content type"
-        )
-
-    return { 'healthy': True, 'Accept': accept }
-
 # generate as many request handlers as needed
 # each request handler listens to one approved url
-# pylint: disable=cell-var-from-loop
-for approved_url in APPROVED_URLS:
+# pylint: disable=cell-var-from-loop,redefined-outer-name
+def create_handlers(approved_url: str):
 
     @app.post(f'/{approved_url}')
     @limiter.limit('60/minute')
     async def entrypoint(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
         return await scan(request, authorization)
+
+    @app.get(f'/{approved_url}/healthcheck')
+    @limiter.limit('60/minute')
+    def healthcheck(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
+
+        if authorization is None:
+            raise fastapi.HTTPException(
+                status_code=401,
+                detail='Missing authorization header'
+            )
+
+        accept = request.headers.get("accept").casefold()
+        if accept != "application/json":
+            raise fastapi.HTTPException(
+                status_code=406,
+                detail="Invalid content type"
+            )
+
+        return { 'healthy': True, 'Accept': accept }
+
+for approved_url in APPROVED_URLS:
+    create_handlers(approved_url)
 
 class Language(str, enum.Enum):
     JS = 'js'
