@@ -32,6 +32,25 @@ APPROVED_URLS = [os.getenv(f'APPROVED_URL_{i}', 'scan') for i in range(int(NUM_A
 
 limiter = slowapi.Limiter(key_func=lambda request: request.client.host)
 
+@app.get(f'/{approved_url}/healthcheck')
+@limiter.limit('60/minute')
+def healthcheck(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
+
+    if authorization is None:
+        raise fastapi.HTTPException(
+            status_code=401,
+            detail='Missing authorization header'
+        )
+
+    accept = request.headers.get("accept").casefold()
+    if accept != "application/json":
+        raise fastapi.HTTPException(
+            status_code=406,
+            detail="Invalid content type"
+        )
+
+    return { 'healthy': True, 'Accept': accept }
+
 # generate as many request handlers as needed
 # each request handler listens to one approved url
 # pylint: disable=cell-var-from-loop
@@ -337,8 +356,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 if 'status' in actual_ast and 'filename' in actual_ast and actual_ast['status'] == 'FAILED':
                     num_parse_errors[language] += 1
                     total_num_files[language] += 1
-                    filename = actual_ast['filename']
-                    message = actual_ast['message']
+                    #filename = actual_ast['filename']
+                    #message = actual_ast['message']
                     #if language == Language.PY:
                     #    if filename.endswith('sickchill/sickchill/views/authentication.py'):
                     #        logging.info(f'FAILED({message}): {filename}')
@@ -400,7 +419,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     pattern = r'q(\d+)\(\[[a-zA-Z0-9_,\(\)]*startloc_(\d+)_(\d+)_endloc_(\d+)_(\d+)\)\]\): yes'
     region = generate_sarif.Region.make_default()
     if match := re.search(pattern, result):
-        query_number = int(match.group(1))
+        # TODO: propagate the query number inside the Sarif output
+        query_number = int(match.group(1)) # pylint: disable=unused-variable
         lineStart = int(match.group(2))
         colStart = int(match.group(3))
         lineEnd = int(match.group(4))
