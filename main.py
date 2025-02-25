@@ -52,7 +52,7 @@ def create_handlers(approved_url: str):
                 detail='Missing authorization header'
             )
 
-        accept = request.headers.get("accept").casefold()
+        accept = request.headers.get('accept', '').casefold()
         if accept != "application/json":
             raise fastapi.HTTPException(
                 status_code=406,
