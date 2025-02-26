@@ -337,7 +337,13 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     with tempfile.NamedTemporaryFile(delete=False) as queries_file:
         queries_filename = queries_file.name
         dhscanner_queries = os.path.join(workdir, repo_name, '.dhscanner.queries')
-        shutil.copy(dhscanner_queries, queries_filename)
+        try:
+            shutil.copy(dhscanner_queries, queries_filename)
+        except FileNotFoundError as e:
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail='file .dhscanner.queries missing from repo'
+            ) from e
 
     # actual source files are no longer needed
     # everything is inside the language asts
