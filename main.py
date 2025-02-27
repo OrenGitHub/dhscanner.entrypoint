@@ -336,7 +336,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     # make sure to copy the queries file
     with tempfile.NamedTemporaryFile(delete=False) as queries_file:
         queries_filename = queries_file.name
-        dhscanner_queries = os.path.join(workdir, repo_name, '.dhscanner.queries')
+        dhscanner_queries = os.path.join(workdir, '.dhscanner.queries')
         try:
             shutil.copy(dhscanner_queries, queries_filename)
         except FileNotFoundError as e:
