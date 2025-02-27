@@ -186,7 +186,7 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     #if filename.endswith('sickchill/sickchill/views/authentication.py'):
     #    logging.info(response.text)
 
-def parse_code(files: dict[Language, list[str]]):
+def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
 
     asts = collections.defaultdict(list) # type: ignore[var-annotated]
 
@@ -248,7 +248,7 @@ def query_engine(kb_filename: str, queries_filename: str):
     return response.text
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
-async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
+async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)) -> dict:
 
     if authorization is None:
         raise fastapi.HTTPException(
@@ -355,8 +355,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     dhscanner_asts = parse_language_asts(language_asts)
 
     valid_dhscanner_asts = []
-    total_num_files: dict[str,int] = collections.defaultdict(int)
-    num_parse_errors: dict[str,int] = collections.defaultdict(int)
+    total_num_files: dict[Language, int] = collections.defaultdict(int)
+    num_parse_errors: dict[Language, int] = collections.defaultdict(int)
 
     for language, asts in dhscanner_asts.items():
         for ast in asts:
@@ -392,10 +392,13 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     try:
         bitcode_as_json = json.loads(content)
         logging.info('[ step 3 ] code gen ............. : finished 😃 ')
-    except ValueError:
+    except ValueError as e:
         logging.info('[ step 3 ] code gen ............. : failed 😬 ')
         logging.info(content)
-        return
+        raise fastapi.HTTPException(
+            status_code=400,
+            detail='code generation failed'
+        ) from e
 
     logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
@@ -404,10 +407,13 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     try:
         content = json.loads(kb)['content']
         logging.info('[ step 4 ] knowledge base gen ... : finished 😃 ')
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         logging.warning('[ step 4 ] knowledge base gen ... : failed 😬 ')
         logging.warning(kb['content'])
-        return
+        raise fastapi.HTTPException(
+            status_code=400,
+            detail='knowledge base generation failed'
+        ) from e
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         kb_filename = f.name
@@ -441,8 +447,17 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             colEnd=colEnd
         )
 
+    messages = []
+    for language in Language:
+        total = total_num_files[language]
+        errors = num_parse_errors[language]
+        message = f'{language.value}={total-errors}/{total}'
+        if total - errors > 0:
+            messages.append(message)
+
+    repo_info = ','.join(messages)
     sarif = generate_sarif.run(
-        repo_name,
+        f'{repo_name}({repo_info})',
         'open redirect',
         region
     )
