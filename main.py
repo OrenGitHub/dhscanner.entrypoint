@@ -456,8 +456,14 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             messages.append(message)
 
     repo_info = ','.join(messages)
+    all_kb_facts = sorted(set(content))
+    facts = []
+    for fact in all_kb_facts:
+        if 'startloc_32_16_endloc_32_54' in fact:
+            facts.append(fact)
+
     sarif = generate_sarif.run(
-        f'{repo_name}({repo_info})',
+        f'{repo_name}({repo_info})[{facts}]',
         'open redirect',
         region
     )
