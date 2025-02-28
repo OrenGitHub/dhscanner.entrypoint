@@ -442,10 +442,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         lineEnd = int(match.group(4))
         colEnd = int(match.group(5))
         region = generate_sarif.Region(
-            lineStart=lineStart,
-            lineEnd=lineEnd,
-            colStart=colStart,
-            colEnd=colEnd
+            startLine=lineStart,
+            endLine=lineEnd,
+            startColumn=colStart,
+            endColumn=colEnd
         )
 
     messages = []

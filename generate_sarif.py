@@ -15,18 +15,18 @@ class SarifMessage:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Region:
 
-    lineStart: int
-    lineEnd: int
-    colStart: int
-    colEnd: int
+    startLine: int
+    endLine: int
+    startColumn: int
+    endColumn: int
 
     @staticmethod
     def make_default() -> Region:
         return Region(
-            lineStart=0,
-            lineEnd=0,
-            colStart=0,
-            colEnd=0
+            startLine=0,
+            endLine=0,
+            startColumn=0,
+            endColumn=0
         )
 
 @dataclasses.dataclass(frozen=True)
