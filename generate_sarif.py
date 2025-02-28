@@ -66,6 +66,7 @@ class SarifRun:
 @dataclasses.dataclass(frozen=True)
 class Sarif:
 
+    version: str
     runs: list[SarifRun]
 
 def run(filename: str, description: str, region: Region) -> Sarif:
@@ -80,4 +81,4 @@ def run(filename: str, description: str, region: Region) -> Sarif:
         locations=[location]
     )
     runs = [SarifRun(tool=dhscanner,results=[result])]
-    return Sarif(runs)
+    return Sarif('2.1.0', runs)
