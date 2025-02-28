@@ -456,6 +456,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         if total - errors > 0:
             messages.append(message)
 
+    # this is an efficient debug tool
+    # pylint: disable=unused-variable
     repo_info = ','.join(messages)
     all_kb_facts = sorted(set(content))
     facts = []
@@ -466,7 +468,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 facts.append(fact)
 
     sarif = generate_sarif.run(
-        f'{repo_name}({repo_info})[{facts}]<{result}>',
+        repo_name,
         'open redirect',
         region
     )
