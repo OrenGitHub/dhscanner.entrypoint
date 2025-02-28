@@ -459,8 +459,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     all_kb_facts = sorted(set(content))
     facts = []
     for fact in all_kb_facts:
-        if ('LoginHandler' in fact) or ('startloc_32_16_endloc_32_54' in fact):
-            facts.append(fact)
+        fact_part = request.headers.get('X-Relevant-Facts')
+        if fact_part is not None:
+            if fact_part in fact:
+                facts.append(fact)
 
     sarif = generate_sarif.run(
         f'{repo_name}({repo_info})[{facts}]',
