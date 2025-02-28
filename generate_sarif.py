@@ -38,7 +38,7 @@ class ArtifactLocation:
 class PhysicalLocation:
 
     artifactLocation: ArtifactLocation
-    resgion: Region
+    region: Region
 
 @dataclasses.dataclass(frozen=True)
 class SarifLocation:
