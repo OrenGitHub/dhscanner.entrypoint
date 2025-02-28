@@ -459,7 +459,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     all_kb_facts = sorted(set(content))
     facts = []
     for fact in all_kb_facts:
-        if 'startloc_32_16_endloc_32_54' in fact:
+        if ('LoginHandler' in fact) or ('startloc_32_16_endloc_32_54' in fact):
             facts.append(fact)
 
     sarif = generate_sarif.run(
