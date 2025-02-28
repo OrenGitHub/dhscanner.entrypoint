@@ -236,7 +236,7 @@ def kbgen(callables):
     return response.text
 
 # pylint: disable=consider-using-with,logging-fstring-interpolation
-def query_engine(kb_filename: str, queries_filename: str):
+def query_engine(kb_filename: str, queries_filename: str) -> str:
 
     kb_and_queries = {
         'kb': ('kb', open(kb_filename, encoding='utf-8')),
@@ -465,7 +465,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 facts.append(fact)
 
     sarif = generate_sarif.run(
-        f'{repo_name}({repo_info})[{facts}]',
+        f'{repo_name}({repo_info})[{facts}]<{result}>',
         'open redirect',
         region
     )
