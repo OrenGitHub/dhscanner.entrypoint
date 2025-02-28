@@ -236,7 +236,7 @@ def kbgen(callables):
     return response.text
 
 # pylint: disable=consider-using-with,logging-fstring-interpolation
-def query_engine(kb_filename: str, queries_filename: str) -> str:
+def query_engine(kb_filename: str, queries_filename: str, debug: bool) -> str:
 
     kb_and_queries = {
         'kb': ('kb', open(kb_filename, encoding='utf-8')),
@@ -244,7 +244,7 @@ def query_engine(kb_filename: str, queries_filename: str) -> str:
     }
 
     url = f'{TO_QUERY_ENGINE_URL}'
-    response = requests.post(url, files=kb_and_queries)
+    response = requests.post(url, files=kb_and_queries, data={'debug': json.dumps(debug)})
     return response.text
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
@@ -426,7 +426,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
     logging.info('[ step 6 ] query engine ......... : starting 🙏 ')
 
-    result = query_engine(kb_filename, queries_filename)
+    debug_queryengine = json.loads(request.headers.get('X-Debug-Queryengine', 'false'))
+    result = query_engine(kb_filename, queries_filename, debug_queryengine)
     os.remove(queries_filename)
 
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
