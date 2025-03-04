@@ -247,6 +247,16 @@ def query_engine(kb_filename: str, queries_filename: str, debug: bool) -> str:
     response = requests.post(url, files=kb_and_queries, data={'debug': json.dumps(debug)})
     return response.text
 
+def patternify() -> str:
+    start = r'startloc_(\d+)_(\d+)'
+    end = r'endloc_(\d+)_(\d+)'
+    fname = r'([a-z0-9]*[_slash_[a-z0-9]*]*)_dot_py'
+    loc = fr'{start}_{end}_{fname}'
+    edge = fr'\({loc},{loc}\)'
+    path = fr'{edge}(,{edge})*'
+    query = r'q(\d+)'
+    return fr'{query}\(\[{path}\]\): yes'
+
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)) -> dict:
 
@@ -430,24 +440,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     result = query_engine(kb_filename, queries_filename, debug_queryengine)
     os.remove(queries_filename)
 
-    logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
-
-    pattern = r'q(\d+)\(\[[a-zA-Z0-9_,\(\)]*startloc_(\d+)_(\d+)_endloc_(\d+)_(\d+)\)\]\): yes'
-    region = generate_sarif.Region.make_default()
-    if match := re.search(pattern, result):
-        # TODO: propagate the query number inside the Sarif output
-        query_number = int(match.group(1)) # pylint: disable=unused-variable
-        lineStart = int(match.group(2))
-        colStart = int(match.group(3))
-        lineEnd = int(match.group(4))
-        colEnd = int(match.group(5))
-        region = generate_sarif.Region(
-            startLine=lineStart,
-            endLine=lineEnd,
-            startColumn=colStart,
-            endColumn=colEnd
-        )
-
     messages = []
     for language in Language:
         total = total_num_files[language]
@@ -467,8 +459,28 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             if fact_part in fact:
                 facts.append(fact)
 
+    logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
+
+    pattern = patternify()
+    filename = repo_name
+    region = generate_sarif.Region.make_default()
+    if match := re.search(pattern, result):
+        # TODO: propagate the query number inside the Sarif output
+        query_number = int(match.group(1)) # pylint: disable=unused-variable
+        lineStart = int(match.group(2))
+        colStart = int(match.group(3))
+        lineEnd = int(match.group(4))
+        colEnd = int(match.group(5))
+        filename = match.groups()[-1]
+        region = generate_sarif.Region(
+            startLine=lineStart,
+            endLine=lineEnd,
+            startColumn=colStart,
+            endColumn=colEnd
+        )
+
     sarif = generate_sarif.run(
-        repo_name,
+        filename,
         'open redirect',
         region
     )
