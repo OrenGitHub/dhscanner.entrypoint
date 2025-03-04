@@ -480,7 +480,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         )
 
     sarif = generate_sarif.run(
-        filename,
+        filename.replace('_slash_', '/') + '.py',
         'open redirect',
         region
     )
