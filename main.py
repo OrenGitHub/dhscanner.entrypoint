@@ -462,8 +462,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
 
     pattern = patternify()
-    filename = repo_name
-    region = generate_sarif.Region.make_default()
+    sarif = generate_sarif.empty()
     if match := re.search(pattern, result):
         # TODO: propagate the query number inside the Sarif output
         query_number = int(match.group(1)) # pylint: disable=unused-variable
@@ -479,11 +478,11 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             endColumn=colEnd
         )
 
-    sarif = generate_sarif.run(
-        filename.replace('_slash_', '/') + '.py',
-        'open redirect',
-        region
-    )
+        sarif = generate_sarif.run(
+            filename.replace('_slash_', '/') + '.py',
+            'open redirect',
+            region
+        )
 
     logging.info('[ step 8 ] sarif response ....... : finished 😃 ')
     logging.info('[ step 9 ] sending response now   :  🚀 ')

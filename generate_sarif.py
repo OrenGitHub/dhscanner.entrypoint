@@ -69,6 +69,12 @@ class Sarif:
     version: str
     runs: list[SarifRun]
 
+def empty() -> Sarif:
+    driver = Driver('dhscanner')
+    dhscanner = SarifTool(driver)
+    runs = [SarifRun(tool=dhscanner,results=[])]
+    return Sarif('2.1.0', runs)
+
 def run(filename: str, description: str, region: Region) -> Sarif:
     driver = Driver('dhscanner')
     dhscanner = SarifTool(driver)
