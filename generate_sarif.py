@@ -50,7 +50,6 @@ class SarifLocation:
 class ThreadFlowLocation:
 
     location: PhysicalLocation
-    kind: str
 
 @dataclasses.dataclass(frozen=True)
 class ThreadFlow:
@@ -93,6 +92,7 @@ def empty() -> Sarif:
     runs = [SarifRun(tool=dhscanner,results=[])]
     return Sarif('2.1.0', runs)
 
+# pylint: disable=too-many-locals
 def run(*, filename: str, description: str, start: Region, end: Region) -> Sarif:
     driver = Driver('dhscanner')
     dhscanner = SarifTool(driver)
@@ -100,8 +100,8 @@ def run(*, filename: str, description: str, start: Region, end: Region) -> Sarif
     physical_location_start = PhysicalLocation(artifactLocation, start)
     physical_location_end = PhysicalLocation(artifactLocation, end)
     location_end = SarifLocation(physical_location_end)
-    thread_flow_start = ThreadFlowLocation(physical_location_start, 'source')
-    thread_flow_end = ThreadFlowLocation(physical_location_end, 'sink')
+    thread_flow_start = ThreadFlowLocation(physical_location_start)
+    thread_flow_end = ThreadFlowLocation(physical_location_end)
     thread_flow = [ThreadFlow([thread_flow_start, thread_flow_end])]
     codeFlows = [CodeFlow(thread_flow)]
     result = SarifResult(
