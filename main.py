@@ -269,8 +269,8 @@ def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
 
         return generate_sarif.Region(
             startLine=locs[0],
-            endLine=locs[1],
-            startColumn=locs[2],
+            startColumn=locs[1],
+            endLine=locs[2],
             endColumn=locs[3]
         )
 
