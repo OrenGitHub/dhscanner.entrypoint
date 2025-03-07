@@ -471,17 +471,31 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         lineEnd = int(match.group(4))
         colEnd = int(match.group(5))
         filename = match.group(6)
-        region = generate_sarif.Region(
+
+        lineStartSink = int(match.group(7))
+        colStartSink = int(match.group(8))
+        lineEndSink = int(match.group(9))
+        colEndSink = int(match.group(10))
+
+        source = generate_sarif.Region(
             startLine=lineStart,
             endLine=lineEnd,
             startColumn=colStart,
             endColumn=colEnd
         )
 
+        sink = generate_sarif.Region(
+            startLine=lineStartSink,
+            endLine=lineEndSink,
+            startColumn=colStartSink,
+            endColumn=colEndSink
+        )
+
         sarif = generate_sarif.run(
-            filename.replace('_slash_', '/') + '.py',
-            'open redirect',
-            region
+            filename=filename.replace('_slash_', '/') + '.py',
+            description='open redirect',
+            start=source,
+            end=sink
         )
 
     logging.info('[ step 8 ] sarif response ....... : finished 😃 ')
