@@ -97,17 +97,16 @@ def run(*, filename: str, description: str, start: Region, end: Region) -> Sarif
     driver = Driver('dhscanner')
     dhscanner = SarifTool(driver)
     artifactLocation = ArtifactLocation(filename)
-    physical_location_start = PhysicalLocation(artifactLocation, start)
-    physical_location_end = PhysicalLocation(artifactLocation, end)
-    location_end = SarifLocation(physical_location_end)
-    thread_flow_start = ThreadFlowLocation(physical_location_start)
-    thread_flow_end = ThreadFlowLocation(physical_location_end)
+    sarif_location_start = SarifLocation(PhysicalLocation(artifactLocation, start))
+    sarif_location_end = SarifLocation(PhysicalLocation(artifactLocation, end))
+    thread_flow_start = ThreadFlowLocation(sarif_location_start)
+    thread_flow_end = ThreadFlowLocation(sarif_location_end)
     thread_flow = [ThreadFlow([thread_flow_start, thread_flow_end])]
     codeFlows = [CodeFlow(thread_flow)]
     result = SarifResult(
         ruleId='dataflow',
         message=SarifMessage(description),
-        locations=[location_end],
+        locations=[sarif_location_end],
         codeFlows=codeFlows
 
     )
