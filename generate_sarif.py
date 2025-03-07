@@ -49,7 +49,7 @@ class SarifLocation:
 @dataclasses.dataclass(frozen=True)
 class ThreadFlowLocation:
 
-    location: PhysicalLocation
+    location: SarifLocation
 
 @dataclasses.dataclass(frozen=True)
 class ThreadFlow:
