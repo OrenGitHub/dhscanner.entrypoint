@@ -257,6 +257,25 @@ def patternify() -> str:
     query = r'q(\d+)'
     return fr'{query}\(\[{path}\]\): yes'
 
+def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
+
+    n = len(match.groups())
+    for i in reversed(range(5, n)):
+
+        try:
+            locs = [int(match.group(i-d)) for d in reversed(range(4))]
+        except (ValueError, TypeError):
+            continue
+
+        return generate_sarif.Region(
+            startLine=locs[0],
+            endLine=locs[1],
+            startColumn=locs[2],
+            endColumn=locs[3]
+        )
+
+    return None
+
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)) -> dict:
 
@@ -472,11 +491,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         colEnd = int(match.group(5))
         filename = match.group(6)
 
-        lineStartSink = int(match.group(7))
-        colStartSink = int(match.group(8))
-        lineEndSink = int(match.group(9))
-        colEndSink = int(match.group(10))
-
         source = generate_sarif.Region(
             startLine=lineStart,
             endLine=lineEnd,
@@ -484,12 +498,9 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             endColumn=colEnd
         )
 
-        sink = generate_sarif.Region(
-            startLine=lineStartSink,
-            endLine=lineEndSink,
-            startColumn=colStartSink,
-            endColumn=colEndSink
-        )
+        sink = sinkify(match)
+        if sink is None:
+            sink = source
 
         sarif = generate_sarif.run(
             filename=filename.replace('_slash_', '/') + '.py',
