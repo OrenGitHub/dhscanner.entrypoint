@@ -70,6 +70,7 @@ class Language(str, enum.Enum):
     PHP = 'php'
     PY = 'py'
     RB = 'rb'
+    CS = 'cs'
     BLADE_PHP = 'blade.php'
 
 AST_BUILDER_URL = {
@@ -78,6 +79,7 @@ AST_BUILDER_URL = {
     Language.PHP: 'http://frontphp:5000/to/php/ast',
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
     Language.RB: 'http://frontrb:8007/to/native/cruby/ast',
+    Language.CS: 'http://frontcs:8080/to/native/cs/ast',
     Language.BLADE_PHP: 'http://frontphp:5000/to/php/code'
 }
 
@@ -87,6 +89,7 @@ DHSCANNER_AST_BUILDER_URL = {
     Language.PHP: 'http://parsers:3000/from/php/to/dhscanner/ast',
     Language.PY: 'http://parsers:3000/from/py/to/dhscanner/ast',
     Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
+    Language.CS: 'http://parsers:3000/from/cs/to/dhscanner/ast',
 }
 
 CSRF_TOKEN = 'http://frontphp:5000/csrf_token'
@@ -183,8 +186,8 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    #if filename.endswith('sickchill/sickchill/views/authentication.py'):
-    #    logging.info(response.text)
+    if filename.endswith('YamlDotNet/Core/Parser.cs'):
+        logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -394,11 +397,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 if 'status' in actual_ast and 'filename' in actual_ast and actual_ast['status'] == 'FAILED':
                     num_parse_errors[language] += 1
                     total_num_files[language] += 1
-                    #filename = actual_ast['filename']
-                    #message = actual_ast['message']
-                    #if language == Language.PY:
-                    #    if filename.endswith('sickchill/sickchill/views/authentication.py'):
-                    #        logging.info(f'FAILED({message}): {filename}')
+                    filename = actual_ast['filename']
+                    message = actual_ast['message']
+                    if filename.endswith('YamlDotNet/Core/Parser.cs'):
+                        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
