@@ -67,6 +67,7 @@ for approved_url in APPROVED_URLS:
 class Language(str, enum.Enum):
     JS = 'js'
     TS = 'ts'
+    TSX = 'tsx'
     PHP = 'php'
     PY = 'py'
     RB = 'rb'
@@ -75,7 +76,8 @@ class Language(str, enum.Enum):
 
 AST_BUILDER_URL = {
     Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
-    Language.TS: 'http://frontts:8008/to/native/ts/ast',
+    Language.TS: 'http://frontts:3000/to/native/ts/ast',
+    Language.TSX: 'http://frontts:3000/to/native/ts/ast',
     Language.PHP: 'http://frontphp:5000/to/php/ast',
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
     Language.RB: 'http://frontrb:8007/to/native/cruby/ast',
@@ -86,6 +88,7 @@ AST_BUILDER_URL = {
 DHSCANNER_AST_BUILDER_URL = {
     Language.JS: 'http://parsers:3000/from/js/to/dhscanner/ast',
     Language.TS: 'http://parsers:3000/from/ts/to/dhscanner/ast',
+    Language.TSX: 'http://parsers:3000/from/ts/to/dhscanner/ast',
     Language.PHP: 'http://parsers:3000/from/php/to/dhscanner/ast',
     Language.PY: 'http://parsers:3000/from/py/to/dhscanner/ast',
     Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
@@ -403,7 +406,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     for language in dhscanner_asts.keys():
         n = total_num_files[language]
         errors = num_parse_errors[language]
-        logging.info(f'[ step 2 ] dhscanner ast ( {language.value} )   : {n - errors}/{n}')
+        logging.info(f'[ step 2 ] dhscanner ast ( {language.value:<3} )  : {n - errors}/{n}')
 
     bitcodes = codegen(valid_dhscanner_asts)
 
