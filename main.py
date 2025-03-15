@@ -316,15 +316,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 1 ] streamed tar file .... : yes 😃 ')
 
-    repo_name = request.headers.get('X-Directory-Name')
-    if repo_name is None:
-        raise fastapi.HTTPException(
-            status_code=400,
-            detail='repo name (via X-Directory-Name header) is missing'
-        )
-
-    logging.info('[ step 1 ] repo name received ... : yes 😃 ')
-
     with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as f:
         tar_filename = f.name
         async for chunk in request.stream():
