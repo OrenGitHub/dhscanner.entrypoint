@@ -189,8 +189,8 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('YamlDotNet/Core/Parser.cs'):
-        logging.info(response.text)
+    #if filename.endswith('packages/ui/src/modules/auth/use-auth.tsx'):
+    #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -216,7 +216,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('sickchill/sickchill/views/authentication.py'):
+    #if filename.endswith('packages/ui/src/modules/auth/use-auth.tsx'):
     #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -253,10 +253,10 @@ def query_engine(kb_filename: str, queries_filename: str, debug: bool) -> str:
     response = requests.post(url, files=kb_and_queries, data={'debug': json.dumps(debug)})
     return response.text
 
-def patternify() -> str:
+def patternify(suffix: str) -> str:
     start = r'startloc_(\d+)_(\d+)'
     end = r'endloc_(\d+)_(\d+)'
-    fname = r'([a-z0-9]*[_slash_[a-z0-9]*]*)_dot_py'
+    fname = fr'([^,]+_dot_{suffix})'
     loc = fr'{start}_{end}_{fname}'
     edge = fr'\({loc},{loc}\)'
     path = fr'{edge}(,{edge})*'
@@ -391,10 +391,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 if 'status' in actual_ast and 'filename' in actual_ast and actual_ast['status'] == 'FAILED':
                     num_parse_errors[language] += 1
                     total_num_files[language] += 1
-                    filename = actual_ast['filename']
-                    message = actual_ast['message']
-                    if filename.endswith('YamlDotNet/Core/Parser.cs'):
-                        logging.info(f'FAILED({message}): {filename}')
+                    #filename = actual_ast['filename']
+                    #message = actual_ast['message']
+                    #if filename.endswith('packages/ui/src/modules/auth/redirects.tsx'):
+                    #    logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
@@ -417,6 +417,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     try:
         bitcode_as_json = json.loads(content)
         logging.info('[ step 3 ] code gen ............. : finished 😃 ')
+        # logging.info(bitcode_as_json)        
     except ValueError as e:
         logging.info('[ step 3 ] code gen ............. : failed 😬 ')
         logging.info(content)
@@ -475,35 +476,45 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 facts.append(fact)
 
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
+    logging.info(result)
 
-    pattern = patternify()
     sarif = generate_sarif.empty()
-    if match := re.search(pattern, result):
-        # TODO: propagate the query number inside the Sarif output
-        query_number = int(match.group(1)) # pylint: disable=unused-variable
-        lineStart = int(match.group(2))
-        colStart = int(match.group(3))
-        lineEnd = int(match.group(4))
-        colEnd = int(match.group(5))
-        filename = match.group(6)
+    for language in Language:
+        suffix = language.value
+        pattern = patternify(suffix)
+        if match := re.search(pattern, result):
+            # TODO: propagate the query number inside the Sarif output
+            query_number = int(match.group(1)) # pylint: disable=unused-variable
+            lineStart = int(match.group(2))
+            colStart = int(match.group(3))
+            lineEnd = int(match.group(4))
+            colEnd = int(match.group(5))
+            filename_start = match.group(6)
 
-        source = generate_sarif.Region(
-            startLine=lineStart,
-            endLine=lineEnd,
-            startColumn=colStart,
-            endColumn=colEnd
-        )
+            source = generate_sarif.Region(
+                startLine=lineStart,
+                endLine=lineEnd,
+                startColumn=colStart,
+                endColumn=colEnd
+            )
 
-        sink = sinkify(match)
-        if sink is None:
-            sink = source
+            sink = sinkify(match)
+            if sink is None:
+                sink = source
 
-        sarif = generate_sarif.run(
-            filename=filename.replace('_slash_', '/') + '.py',
-            description='open redirect',
-            start=source,
-            end=sink
-        )
+            filename_end = match.group(len(match.groups()))
+
+            sarif = generate_sarif.run(
+                filename_start=filename_start.replace('_slash_', '/').replace('_dot_', '.'),
+                filename_end=filename_end.replace('_slash_', '/').replace('_dot_', '.'),
+                description='open redirect',
+                start=source,
+                end=sink
+            )
+
+            # TODO: find *all* paths, rather than stopping
+            # after the first path found
+            break
 
     logging.info('[ step 8 ] sarif response ....... : finished 😃 ')
     logging.info('[ step 9 ] sending response now   :  🚀 ')

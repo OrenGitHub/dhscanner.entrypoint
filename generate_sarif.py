@@ -93,12 +93,13 @@ def empty() -> Sarif:
     return Sarif('2.1.0', runs)
 
 # pylint: disable=too-many-locals
-def run(*, filename: str, description: str, start: Region, end: Region) -> Sarif:
+def run(*, filename_start: str, filename_end: str, description: str, start: Region, end: Region) -> Sarif:
     driver = Driver('dhscanner')
     dhscanner = SarifTool(driver)
-    artifactLocation = ArtifactLocation(filename)
-    sarif_location_start = SarifLocation(PhysicalLocation(artifactLocation, start))
-    sarif_location_end = SarifLocation(PhysicalLocation(artifactLocation, end))
+    artifactLocation_start = ArtifactLocation(filename_start)
+    artifactLocation_end = ArtifactLocation(filename_end)
+    sarif_location_start = SarifLocation(PhysicalLocation(artifactLocation_start, start))
+    sarif_location_end = SarifLocation(PhysicalLocation(artifactLocation_end, end))
     thread_flow_start = ThreadFlowLocation(sarif_location_start)
     thread_flow_end = ThreadFlowLocation(sarif_location_end)
     thread_flow = [ThreadFlow([thread_flow_start, thread_flow_end])]
