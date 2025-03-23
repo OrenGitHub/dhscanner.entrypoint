@@ -72,6 +72,7 @@ class Language(str, enum.Enum):
     PY = 'py'
     RB = 'rb'
     CS = 'cs'
+    GO = 'go'
     BLADE_PHP = 'blade.php'
 
 AST_BUILDER_URL = {
@@ -82,6 +83,7 @@ AST_BUILDER_URL = {
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
     Language.RB: 'http://frontrb:8007/to/native/cruby/ast',
     Language.CS: 'http://frontcs:8080/to/native/cs/ast',
+    Language.GO: 'http://frontgo:8080/to/native/go/ast',
     Language.BLADE_PHP: 'http://frontphp:5000/to/php/code'
 }
 
@@ -93,6 +95,7 @@ DHSCANNER_AST_BUILDER_URL = {
     Language.PY: 'http://parsers:3000/from/py/to/dhscanner/ast',
     Language.RB: 'http://parsers:3000/from/rb/to/dhscanner/ast',
     Language.CS: 'http://parsers:3000/from/cs/to/dhscanner/ast',
+    Language.GO: 'http://parsers:3000/from/go/to/dhscanner/ast',
 }
 
 CSRF_TOKEN = 'http://frontphp:5000/csrf_token'
@@ -189,8 +192,8 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    #if filename.endswith('packages/ui/src/modules/auth/use-auth.tsx'):
-    #    logging.info(response.text)
+    if filename.endswith('server/handles/auth.go'):
+        logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -216,8 +219,8 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('packages/ui/src/modules/auth/use-auth.tsx'):
-    #    logging.info(response.text)
+    if filename.endswith('server/handles/auth.go'):
+        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
