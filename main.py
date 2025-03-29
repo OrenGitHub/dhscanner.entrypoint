@@ -7,6 +7,7 @@ import enum
 import magic
 import typing
 import shutil
+import pathlib
 import tarfile
 import logging
 import fastapi
@@ -81,7 +82,7 @@ AST_BUILDER_URL = {
     Language.TSX: 'http://frontts:3000/to/native/ts/ast',
     Language.PHP: 'http://frontphp:5000/to/php/ast',
     Language.PY: 'http://frontpy:5000/to/native/py/ast',
-    Language.RB: 'http://frontrb:8007/to/native/cruby/ast',
+    Language.RB: 'http://frontrb:3000/to/native/cruby/ast',
     Language.CS: 'http://frontcs:8080/to/native/cs/ast',
     Language.GO: 'http://frontgo:8080/to/native/go/ast',
     Language.BLADE_PHP: 'http://frontphp:5000/to/php/code'
@@ -192,7 +193,7 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('server/handles/auth.go'):
+    if filename.endswith('server/handlers/meshsync_handler.go'):
         logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
@@ -219,7 +220,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    if filename.endswith('server/handles/auth.go'):
+    if filename.endswith('server/handlers/meshsync_handler.go'):
         logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -362,17 +363,17 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     logging.info('[ step 2 ] native asts .......... : finished 😃 ')
 
     # before the entire working directory is deleted,
-    # make sure to copy the queries file
+    # make sure to copy the queries file ( if it exists )
     with tempfile.NamedTemporaryFile(delete=False) as queries_file:
         queries_filename = queries_file.name
         dhscanner_queries = os.path.join(workdir, '.dhscanner.queries')
-        try:
+        if pathlib.Path(dhscanner_queries).is_file():
             shutil.copy(dhscanner_queries, queries_filename)
-        except FileNotFoundError as e:
-            raise fastapi.HTTPException(
-                status_code=400,
-                detail='file .dhscanner.queries missing from repo'
-            ) from e
+        else:
+            # resort to the default of checking owasp top 10
+            # see: https://owasp.org/www-project-top-ten/
+            with open(queries_filename, 'w') as fl:
+                fl.write('owasp_top_10().')
 
     # actual source files are no longer needed
     # everything is inside the language asts
