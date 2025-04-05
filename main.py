@@ -509,7 +509,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             sarif = generate_sarif.run(
                 filename_start=filename_start.replace('_slash_', '/').replace('_dot_', '.'),
                 filename_end=filename_end.replace('_slash_', '/').replace('_dot_', '.'),
-                description='open redirect',
+                description='owasp top 10',
                 start=source,
                 end=sink
             )
