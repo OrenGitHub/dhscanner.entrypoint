@@ -184,8 +184,6 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             'actual_ast': response.text
         })
 
-        if filename.endswith('handesk/app/Ticket.php'):
-            logging.info(response.text)
 
 def add_ast(filename: str, language: Language, asts: dict) -> None:
 
@@ -193,7 +191,7 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('server/handlers/meshsync_handler.go'):
+    if filename.endswith('controllers/admin/emoji.go'):
         logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
@@ -220,7 +218,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    if filename.endswith('server/handlers/meshsync_handler.go'):
+    if filename.endswith('controllers/admin/emoji.go'):
         logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -373,7 +371,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             # resort to the default of checking owasp top 10
             # see: https://owasp.org/www-project-top-ten/
             with open(queries_filename, 'w') as fl:
-                fl.write('owasp_top_10().')
+                fl.write('problems().')
 
     # actual source files are no longer needed
     # everything is inside the language asts
