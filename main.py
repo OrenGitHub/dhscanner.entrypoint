@@ -191,8 +191,8 @@ def add_ast(filename: str, language: Language, asts: dict) -> None:
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('controllers/admin/emoji.go'):
-        logging.info(response.text)
+    #if filename.endswith('controllers/admin/emoji.go'):
+    #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -218,8 +218,8 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    if filename.endswith('controllers/admin/emoji.go'):
-        logging.info(response.text)
+    #if filename.endswith('controllers/admin/emoji.go'):
+    #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -287,30 +287,50 @@ def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)) -> dict:
 
-    if authorization is None:
+    code_sent_to_external_server = request.headers.get(
+        'X-Code-Sent-To-External-Server', 'true'
+    )
+
+    external_server_involved = code_sent_to_external_server in [ 'true' ]
+    if external_server_involved:
+        logging.info('[ step 0 ] external server involved ⚠️')
+        logging.info('[ step 0 ] external server involved use an approved bearer token')
+        logging.info('[ step 0 ] external server involved use an approved url')
+    else:
+        logging.info('[ step 0 ] external server used   : no  😃')
+        logging.info('[ step 0 ] approved bearer token  : no need 😉')
+        logging.info('[ step 0 ] approved url           : no need 😉')
+
+    if external_server_involved and authorization is None:
         raise fastapi.HTTPException(
             status_code=401,
             detail='Missing authorization header'
         )
 
-    logging.info('[ step 1 ] relevant headers ....  : yes 😃 ')
+    if authorization is not None:
+        logging.info('[ step 1 ] authorization headers  : yes 😃 ')
 
-    if not authorization.startswith('Bearer '):
-        raise fastapi.HTTPException(
-            status_code=401,
-            detail='Invalid authorization header'
-        )
+    if external_server_involved:
+        if authorization is not None:
+            if not authorization.startswith('Bearer '):
+                raise fastapi.HTTPException(
+                    status_code=401,
+                    detail='Invalid authorization header'
+                )
 
-    logging.info('[ step 1 ] bearer token exists .. : yes 😃 ')
+    if external_server_involved:
+        if authorization is not None:
+            if authorization.startswith('Bearer '):
+                token = authorization[len('Bearer '):]
+                if token != EXPECTED_TOKEN:
+                    raise fastapi.HTTPException(
+                        status_code=403,
+                        detail="Invalid Bearer token"
+                    )
 
-    token = authorization[len('Bearer '):]
-    if token != EXPECTED_TOKEN:
-        raise fastapi.HTTPException(
-            status_code=403,
-            detail="Invalid Bearer token"
-        )
+                logging.info('[ step 1 ] bearer token sent .... : yes 😃 ')
+                logging.info('[ step 1 ] bearer token valid ... : yes 😃 ')
 
-    logging.info('[ step 1 ] bearer token is valid  : yes 😃 ')
 
     content_type = request.headers.get("content-type")
     if content_type != "application/octet-stream":
