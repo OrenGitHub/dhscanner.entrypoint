@@ -370,7 +370,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         else:
             # resort to the default of checking owasp top 10
             # see: https://owasp.org/www-project-top-ten/
-            with open(queries_filename, 'w') as fl:
+            with open(queries_filename, 'w', encoding='utf-8') as fl:
                 fl.write('problems().')
 
     # actual source files are no longer needed
@@ -419,7 +419,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     try:
         bitcode_as_json = json.loads(content)
         logging.info('[ step 3 ] code gen ............. : finished 😃 ')
-        # logging.info(bitcode_as_json)        
+        # logging.info(bitcode_as_json)
     except ValueError as e:
         logging.info('[ step 3 ] code gen ............. : failed 😬 ')
         logging.info(content)
