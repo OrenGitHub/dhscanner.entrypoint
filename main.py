@@ -139,10 +139,27 @@ def collect_all_sources(workdir: str, ignore_testing_code: bool):
 
     return files
 
-def read_single_file(filename: str):
+def compute_line_byte_offsets(code: str) -> dict[int, int]:
+    offsets = {}
+    current_offset = 0
+    for i, line in enumerate(code.splitlines(keepends=True)):
+        offsets[i + 1] = current_offset
+        current_offset += len(line.encode('utf-8'))
+    return offsets
+
+def remove_tmp_prefix(filename: str) -> str:
+    return re.sub(r"^/tmp/tmp[^/]+/", "", filename)
+
+def read_single_file(filename: str, offsets: typing.Optional[dict[str, dict[int, int]]] = None):
 
     with open(filename, 'r', encoding='utf-8') as fl:
         code = fl.read()
+
+    if offsets is not None:
+        cleaned = remove_tmp_prefix(filename)
+        offsets[cleaned] = compute_line_byte_offsets(code)
+        #if filename.endswith('role_verifications_controller.rb'):
+        #    logging.info(f'offsets[{cleaned}][7] = {offsets[cleaned][7]}')
 
     return { 'source': (filename, code) }
 
@@ -185,23 +202,23 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
         })
 
 
-def add_ast(filename: str, language: Language, asts: dict) -> None:
+def add_ast(filename: str, language: Language, asts: dict, offsets: dict[str, dict[int, int]]) -> None:
 
-    one_file_at_a_time = read_single_file(filename)
+    one_file_at_a_time = read_single_file(filename, offsets)
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    #if filename.endswith('controllers/admin/emoji.go'):
+    #if filename.endswith('role_config_file.rb'):
     #    logging.info(response.text)
 
-def parse_code(files: dict[Language, list[str]]) -> dict[Language, list[dict[str, str]]]:
+def parse_code(files: dict[Language, list[str]], offsets: dict[str, dict[int, int]]) -> dict[Language, list[dict[str, str]]]:
 
     asts = collections.defaultdict(list) # type: ignore[var-annotated]
 
     for language, filenames in files.items():
         if language not in [Language.PHP, Language.BLADE_PHP]:
             for filename in filenames:
-                add_ast(filename, language, asts)
+                add_ast(filename, language, asts, offsets)
 
     # separately because php chosen webserver
     # has a more complex sessio mechanism
@@ -218,7 +235,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('controllers/admin/emoji.go'):
+    #if filename.endswith('role_config_file.rb'):
     #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -283,6 +300,17 @@ def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
         )
 
     return None
+
+def restore(filename: str) -> str:
+    return filename.replace('_slash_', '/').replace('_dot_', '.')
+
+def normalize(filename: str, line: int, offset: int, offsets) -> int:
+    if filename in offsets:
+        if line in offsets[filename]:
+            if offset >= offsets[filename][line]:
+                return offset - offsets[filename][line]
+
+    return offset
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,logging-fstring-interpolation
 async def scan(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)) -> dict:
@@ -376,7 +404,8 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 2 ] native asts .......... : started  😃 ')
 
-    language_asts = parse_code(files)
+    offsets: dict[str, dict[int, int]] = {}
+    language_asts = parse_code(files, offsets)
 
     logging.info('[ step 2 ] native asts .......... : finished 😃 ')
 
@@ -511,24 +540,26 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             colStart = int(match.group(3))
             lineEnd = int(match.group(4))
             colEnd = int(match.group(5))
-            filename_start = match.group(6)
+            filename_start_instrumented = match.group(6)
+            filename_start = restore(filename_start_instrumented)
 
             source = generate_sarif.Region(
                 startLine=lineStart,
                 endLine=lineEnd,
-                startColumn=colStart,
-                endColumn=colEnd
+                startColumn=normalize(filename_start, lineStart, colStart, offsets),
+                endColumn=normalize(filename_start, lineEnd, colEnd, offsets)
             )
 
             sink = sinkify(match)
             if sink is None:
                 sink = source
 
-            filename_end = match.group(len(match.groups()))
+            filename_end_instrumented = match.group(len(match.groups()))
+            filename_end = restore(filename_end_instrumented)
 
             sarif = generate_sarif.run(
-                filename_start=filename_start.replace('_slash_', '/').replace('_dot_', '.'),
-                filename_end=filename_end.replace('_slash_', '/').replace('_dot_', '.'),
+                filename_start=filename_start,
+                filename_end=filename_end,
                 description='owasp top 10',
                 start=source,
                 end=sink
