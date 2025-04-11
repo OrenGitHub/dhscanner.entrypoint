@@ -282,7 +282,7 @@ def patternify(suffix: str) -> str:
     query = r'q(\d+)'
     return fr'{query}\(\[{path}\]\): yes'
 
-def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
+def sinkify(match: re.Match, filename: str, offsets: dict[str, dict[int, int]]) -> typing.Optional[generate_sarif.Region]:
 
     n = len(match.groups())
     for i in reversed(range(5, n)):
@@ -294,9 +294,9 @@ def sinkify(match: re.Match) -> typing.Optional[generate_sarif.Region]:
 
         return generate_sarif.Region(
             startLine=locs[0],
-            startColumn=locs[1],
+            startColumn=normalize(filename, locs[0], locs[1], offsets),
             endLine=locs[2],
-            endColumn=locs[3]
+            endColumn=normalize(filename, locs[2], locs[3], offsets)
         )
 
     return None
@@ -308,7 +308,7 @@ def normalize(filename: str, line: int, offset: int, offsets) -> int:
     if filename in offsets:
         if line in offsets[filename]:
             if offset >= offsets[filename][line]:
-                return offset - offsets[filename][line]
+                return offset - offsets[filename][line] + 1
 
     return offset
 
@@ -550,12 +550,12 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 endColumn=normalize(filename_start, lineEnd, colEnd, offsets)
             )
 
-            sink = sinkify(match)
-            if sink is None:
-                sink = source
-
             filename_end_instrumented = match.group(len(match.groups()))
             filename_end = restore(filename_end_instrumented)
+
+            sink = sinkify(match, filename_end, offsets)
+            if sink is None:
+                sink = source
 
             sarif = generate_sarif.run(
                 filename_start=filename_start,
