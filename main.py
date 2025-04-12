@@ -118,7 +118,7 @@ logging.basicConfig(
 # site-packages for python or vendor/bundle for ruby etc.)
 # pylint: disable=unused-argument
 def scan_this_file(filename: str, language: Language, ignore_testing_code: bool = False) -> bool:
-    if ignore_testing_code and 'test' in filename:
+    if ignore_testing_code and '/test/' in filename:
         return False
 
     return True
@@ -158,8 +158,6 @@ def read_single_file(filename: str, offsets: typing.Optional[dict[str, dict[int,
     if offsets is not None:
         cleaned = remove_tmp_prefix(filename)
         offsets[cleaned] = compute_line_byte_offsets(code)
-        #if filename.endswith('role_verifications_controller.rb'):
-        #    logging.info(f'offsets[{cleaned}][7] = {offsets[cleaned][7]}')
 
     return { 'source': (filename, code) }
 
@@ -208,8 +206,8 @@ def add_ast(filename: str, language: Language, asts: dict, offsets: dict[str, di
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    #if filename.endswith('role_config_file.rb'):
-    #    logging.info(response.text)
+    if filename.endswith('plugins/new_relic/lib/samson_new_relic/samson_plugin.rb'):
+        logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]], offsets: dict[str, dict[int, int]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -235,7 +233,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('role_config_file.rb'):
+    #if filename.endswith('gcloud/lib/samson_gcloud/samson_plugin.rb'):
     #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -397,7 +395,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
             layertar.extractall(path=dirname, filter='tar')
             layertar.close()
 
-    ignore_testing_code_str = request.headers.get('Ignore-Testing-Code', 'false').lower()
+    ignore_testing_code_str = request.headers.get('X-Ignore-Testing-Code', 'false').lower()
     ignore_testing_code = (ignore_testing_code_str in ['yes', 'true'])
 
     files = collect_all_sources(workdir, ignore_testing_code)
@@ -442,10 +440,10 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
                 if 'status' in actual_ast and 'filename' in actual_ast and actual_ast['status'] == 'FAILED':
                     num_parse_errors[language] += 1
                     total_num_files[language] += 1
-                    #filename = actual_ast['filename']
-                    #message = actual_ast['message']
-                    #if filename.endswith('packages/ui/src/modules/auth/redirects.tsx'):
-                    #    logging.info(f'FAILED({message}): {filename}')
+                    filename = actual_ast['filename']
+                    message = actual_ast['message']
+                    if filename.endswith('plugins/new_relic/lib/samson_new_relic/samson_plugin.rb'):
+                        logging.info(f'FAILED({message}): {filename}')
                     continue
 
             except ValueError:
