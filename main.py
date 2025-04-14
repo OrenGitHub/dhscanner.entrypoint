@@ -5,9 +5,11 @@ import glob
 import json
 import enum
 import magic
+import httpx
 import typing
 import shutil
 import pathlib
+import asyncio
 import tarfile
 import logging
 import fastapi
@@ -252,11 +254,20 @@ def codegen(dhscanner_asts):
     response = requests.post(TO_CODEGEN_URL, json=content)
     return { 'content': response.text }
 
-
-def kbgen(callables):
-
-    response = requests.post(TO_KBGEN_URL, json=callables)
+async def kbgen_single(client, one_callable):
+    response = await client.post(TO_KBGEN_URL, json=one_callable)
     return response.text
+
+async def kbgen_async(callables):
+    async with httpx.AsyncClient() as client:
+        tasks = [kbgen_single(client, c) for c in callables]
+        responses = await asyncio.gather(*tasks)
+    return responses
+
+async def kbgen(callables):
+    responses = await kbgen_async(callables)
+    # logging.info(f'received {len(callables)} callables')
+    return responses
 
 # pylint: disable=consider-using-with,logging-fstring-interpolation
 def query_engine(kb_filename: str, queries_filename: str, debug: bool) -> str:
@@ -477,25 +488,36 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
-    kb = kbgen(bitcode_as_json)
+    facts = []
+    callables = bitcode_as_json['actualCallables']
+    n = len(callables)
+    logging.info(f'[ step 4 ] callables ............ : {n}')
+    for index, one_callable in enumerate(callables):
+        response = requests.post(TO_KBGEN_URL, json=one_callable)
+        more_facts = json.loads(response.text)['content']
+        new_facts = len(more_facts)
+        facts.extend(more_facts)
+        logging.info(f'[ step 4 ] {new_facts:<3} facts {index:<3}/{n:<3} :')
 
-    try:
-        content = json.loads(kb)['content']
-        logging.info('[ step 4 ] knowledge base gen ... : finished 😃 ')
-    except json.JSONDecodeError as e:
-        logging.warning('[ step 4 ] knowledge base gen ... : failed 😬 ')
-        logging.warning(kb['content'])
-        raise fastapi.HTTPException(
-            status_code=400,
-            detail='knowledge base generation failed'
-        ) from e
+    #try:
+    #    jsonified_kb = json.loads(kb)
+    #    content = jsonified_kb['content']
+    #    logging.info('[ step 4 ] knowledge base gen ... : finished 😃 ')
+    #except json.JSONDecodeError as e:
+    #    logging.warning('[ step 4 ] knowledge base gen ... : failed 😬 ')
+    #    with open('output.json', 'w') as fl:
+    #        fl.write(kb)
+    #    raise fastapi.HTTPException(
+    #        status_code=400,
+    #        detail='knowledge base generation failed'
+    #    ) from e
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         kb_filename = f.name
         dummy_classloc = 'not_a_real_loc'
         dummy_classname = "'not_a_real_classnem'"
         f.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
-        f.write('\n'.join(sorted(set(content))))
+        f.write('\n'.join(sorted(set(facts))))
         f.write('\n')
 
     logging.info('[ step 5 ] prolog file gen ...... : finished 😃 ')
