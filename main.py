@@ -208,8 +208,8 @@ def add_ast(filename: str, language: Language, asts: dict, offsets: dict[str, di
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    if filename.endswith('plugins/new_relic/lib/samson_new_relic/samson_plugin.rb'):
-        logging.info(response.text)
+    #if filename.endswith('ui.py'):
+    #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]], offsets: dict[str, dict[int, int]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -235,7 +235,7 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('gcloud/lib/samson_gcloud/samson_plugin.rb'):
+    #if filename.endswith('ui.py'):
     #    logging.info(response.text)
 
 def parse_language_asts(language_asts):
@@ -250,9 +250,14 @@ def parse_language_asts(language_asts):
 
 def codegen(dhscanner_asts):
 
-    content = { 'asts': dhscanner_asts }
-    response = requests.post(TO_CODEGEN_URL, json=content)
-    return { 'content': response.text }
+    callables = []
+    for ast in dhscanner_asts:
+        response = requests.post(TO_CODEGEN_URL, json=ast)
+        more_callables = json.loads(response.text)['actualCallables']
+        # logging.info(more_callables)
+        callables.extend(more_callables)
+
+    return callables
 
 async def kbgen_single(client, one_callable):
     response = await client.post(TO_KBGEN_URL, json=one_callable)
@@ -468,32 +473,31 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         errors = num_parse_errors[language]
         logging.info(f'[ step 2 ] dhscanner ast ( {language.value:<3} )  : {n - errors}/{n}')
 
-    bitcodes = codegen(valid_dhscanner_asts)
+    callables = codegen(valid_dhscanner_asts)
 
     logging.info('[ step 2 ] dhscanner asts ....... : finished 😃 ')
 
-    content = bitcodes['content']
-
-    try:
-        bitcode_as_json = json.loads(content)
-        logging.info('[ step 3 ] code gen ............. : finished 😃 ')
-        # logging.info(bitcode_as_json)
-    except ValueError as e:
-        logging.info('[ step 3 ] code gen ............. : failed 😬 ')
-        logging.info(content)
-        raise fastapi.HTTPException(
-            status_code=400,
-            detail='code generation failed'
-        ) from e
+    #try:
+    #    bitcode_as_json = json.loads(content)
+    #    logging.info('[ step 3 ] code gen ............. : finished 😃 ')
+    #    # logging.info(bitcode_as_json)
+    #except ValueError as e:
+    #    logging.info('[ step 3 ] code gen ............. : failed 😬 ')
+    #    logging.info(content)
+    #   raise fastapi.HTTPException(
+    #        status_code=400,
+    #        detail='code generation failed'
+    #    ) from e
 
     logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
     facts = []
-    callables = bitcode_as_json['actualCallables']
+    # callables = bitcode_as_json['actualCallables']
     n = len(callables)
     logging.info(f'[ step 4 ] callables ............ : {n}')
     for index, one_callable in enumerate(callables):
         response = requests.post(TO_KBGEN_URL, json=one_callable)
+        # logging.info(response.text)
         more_facts = json.loads(response.text)['content']
         new_facts = len(more_facts)
         facts.extend(more_facts)
@@ -515,8 +519,13 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         kb_filename = f.name
         dummy_classloc = 'not_a_real_loc'
-        dummy_classname = "'not_a_real_classnem'"
+        dummy_classname = "'not_a_real_classname'"
+        dummy_callable = 'not_a_real_callable'
+        dummy_annotation = "'not.a.real.fqn'"
+        dummy_param_name = "'not_a_real_param_name'"
         f.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
+        f.write(f'kb_callable_annotated_with({dummy_callable}, {dummy_annotation}).\n')
+        f.write(f'kb_callable_annotated_with_user_input_inside_route({dummy_callable}, {dummy_param_name}).\n')
         f.write('\n'.join(sorted(set(facts))))
         f.write('\n')
 
@@ -534,17 +543,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         message = f'{language.value}={total-errors}/{total}'
         if total - errors > 0:
             messages.append(message)
-
-    # this is an efficient debug tool
-    # pylint: disable=unused-variable
-    repo_info = ','.join(messages)
-    all_kb_facts = sorted(set(content))
-    facts = []
-    for fact in all_kb_facts:
-        fact_part = request.headers.get('X-Relevant-Facts')
-        if fact_part is not None:
-            if fact_part in fact:
-                facts.append(fact)
 
     logging.info('[ step 7 ] deleted query file ... : finished 😃 ')
     logging.info(result)
