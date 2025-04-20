@@ -208,7 +208,7 @@ def add_ast(filename: str, language: Language, asts: dict, offsets: dict[str, di
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
 
-    #if filename.endswith('ui.py'):
+    #if filename.endswith('trunk/research/api-server/server.go'):
     #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]], offsets: dict[str, dict[int, int]]) -> dict[Language, list[dict[str, str]]]:
@@ -235,8 +235,8 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
 
-    #if filename.endswith('ui.py'):
-    #    logging.info(response.text)
+    if filename.endswith('server.go'):
+        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -316,7 +316,7 @@ def sinkify(match: re.Match, filename: str, offsets: dict[str, dict[int, int]]) 
     return None
 
 def restore(filename: str) -> str:
-    return filename.replace('_slash_', '/').replace('_dot_', '.')
+    return filename.replace('_slash_', '/').replace('_dot_', '.').replace('_dash_', '-')
 
 def normalize(filename: str, line: int, offset: int, offsets) -> int:
     if filename in offsets:
@@ -477,18 +477,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
 
     logging.info('[ step 2 ] dhscanner asts ....... : finished 😃 ')
 
-    #try:
-    #    bitcode_as_json = json.loads(content)
-    #    logging.info('[ step 3 ] code gen ............. : finished 😃 ')
-    #    # logging.info(bitcode_as_json)
-    #except ValueError as e:
-    #    logging.info('[ step 3 ] code gen ............. : failed 😬 ')
-    #    logging.info(content)
-    #   raise fastapi.HTTPException(
-    #        status_code=400,
-    #        detail='code generation failed'
-    #    ) from e
-
     logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
     facts = []
@@ -502,19 +490,6 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         new_facts = len(more_facts)
         facts.extend(more_facts)
         logging.info(f'[ step 4 ] {new_facts:<3} facts {index:<3}/{n:<3} :')
-
-    #try:
-    #    jsonified_kb = json.loads(kb)
-    #    content = jsonified_kb['content']
-    #    logging.info('[ step 4 ] knowledge base gen ... : finished 😃 ')
-    #except json.JSONDecodeError as e:
-    #    logging.warning('[ step 4 ] knowledge base gen ... : failed 😬 ')
-    #    with open('output.json', 'w') as fl:
-    #        fl.write(kb)
-    #    raise fastapi.HTTPException(
-    #        status_code=400,
-    #        detail='knowledge base generation failed'
-    #    ) from e
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         kb_filename = f.name
