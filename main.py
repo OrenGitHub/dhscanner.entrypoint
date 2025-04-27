@@ -20,8 +20,17 @@ import dataclasses
 import collections
 import generate_sarif
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 
 app = fastapi.FastAPI()
+
+#@app.get("/")
+#async def redirect_to_docs():
+#    return RedirectResponse(url="/docs/")
+
+# docs
+#app.mount("/docs", StaticFiles(directory="site", html=True), name="static")
 
 # every client must have an approved bearer token to access
 # locally deployed webservers are supported - no need for bearer tokens
@@ -35,6 +44,16 @@ APPROVED_URLS = [os.getenv(f'APPROVED_URL_{i}', 'scan') for i in range(int(NUM_A
 
 limiter = slowapi.Limiter(key_func=lambda request: request.client.host)
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s]: %(message)s",
+    datefmt="%d/%m/%Y ( %H:%M:%S )",
+    stream=sys.stdout
+)
+
+x = os.getenv('APPROVED_URL_0', '< undefined >')
+logging.info(f'Approved url 0 = {x}')
+
 # generate as many request handlers as needed
 # each request handler listens to one approved url
 # pylint: disable=cell-var-from-loop,redefined-outer-name
@@ -44,25 +63,6 @@ def create_handlers(approved_url: str):
     @limiter.limit('60/minute')
     async def entrypoint(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
         return await scan(request, authorization)
-
-    @app.get(f'/{approved_url}/healthcheck')
-    @limiter.limit('60/minute')
-    def healthcheck(request: fastapi.Request, authorization: typing.Optional[str] = fastapi.Header(None)):
-
-        if authorization is None:
-            raise fastapi.HTTPException(
-                status_code=401,
-                detail='Missing authorization header'
-            )
-
-        accept = request.headers.get('accept', '').casefold()
-        if accept != "application/json":
-            raise fastapi.HTTPException(
-                status_code=406,
-                detail="Invalid content type"
-            )
-
-        return { 'healthy': True, 'Accept': accept }
 
 for approved_url in APPROVED_URLS:
     create_handlers(approved_url)
@@ -106,13 +106,6 @@ CSRF_TOKEN = 'http://frontphp:5000/csrf_token'
 TO_CODEGEN_URL = 'http://codegen:3000/codegen'
 TO_KBGEN_URL = 'http://kbgen:3000/kbgen'
 TO_QUERY_ENGINE_URL = 'http://queryengine:5000/check'
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] [%(levelname)s]: %(message)s",
-    datefmt="%d/%m/%Y ( %H:%M:%S )",
-    stream=sys.stdout
-)
 
 # TODO: adjust other reasons for exclusion
 # the reasons might depend on the language
@@ -234,9 +227,6 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     url = DHSCANNER_AST_BUILDER_URL[language]
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
-
-    if filename.endswith('server.go'):
-        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -499,6 +489,7 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         dummy_annotation = "'not.a.real.fqn'"
         dummy_param_name = "'not_a_real_param_name'"
         f.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
+        f.write(f'kb_subclass_of( {dummy_classloc}, {dummy_classname}).\n')
         f.write(f'kb_callable_annotated_with({dummy_callable}, {dummy_annotation}).\n')
         f.write(f'kb_callable_annotated_with_user_input_inside_route({dummy_callable}, {dummy_param_name}).\n')
         f.write('\n'.join(sorted(set(facts))))
