@@ -172,13 +172,29 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
     for filename in filenames:
         if filename in files[Language.BLADE_PHP]:
             just_one_blade_php_file = read_single_file(filename)
+
+            # sometimes blade.php files are just plain php files
+            # this could happen for various reasons ...
+            # try the normal php parser first
             response = session.post(
-                AST_BUILDER_URL[Language.BLADE_PHP],
+                AST_BUILDER_URL[Language.PHP],
                 files=just_one_blade_php_file,
                 headers=headers,
                 cookies=cookies
             )
-            php_source_code = { 'source': (filename, response.text) }
+
+            if response.ok:
+                # no transformations need to be done
+                # TODO: fix multiple sends of such blade.php files
+                php_source_code = just_one_blade_php_file
+            else:
+                response = session.post(
+                    AST_BUILDER_URL[Language.BLADE_PHP],
+                    files=just_one_blade_php_file,
+                    headers=headers,
+                    cookies=cookies
+                )
+                php_source_code = { 'source': (filename, response.text) }
         else:
             php_source_code = read_single_file(filename)
 
@@ -189,6 +205,10 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             headers=headers,
             cookies=cookies
         )
+
+        if filename.endswith('resources/views/components/favicon.blade.php'):
+            logging.info(response.text)
+
         asts[Language.PHP].append({
             'filename': filename,
             'actual_ast': response.text
@@ -227,6 +247,9 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     url = DHSCANNER_AST_BUILDER_URL[language]
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
+
+    if filename.endswith('resources/views/components/favicon.blade.php'):
+        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
