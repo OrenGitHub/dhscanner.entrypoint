@@ -216,9 +216,6 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             cookies=cookies
         )
 
-        if filename.endswith('app/Http/Controllers/AdminController.php'):
-            logging.info(response.text)
-
         asts[Language.PHP].append({
             'filename': filename,
             'actual_ast': response.text
