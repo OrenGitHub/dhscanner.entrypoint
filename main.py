@@ -78,6 +78,13 @@ class Language(str, enum.Enum):
     GO = 'go'
     BLADE_PHP = 'blade.php'
 
+    @staticmethod
+    def from_raw_str(raw: str) -> typing.Optional['Language']:
+        try:
+            return Language(raw)
+        except ValueError:
+            return None
+
 AST_BUILDER_URL = {
     Language.JS: 'http://frontjs:3000/to/esprima/js/ast',
     Language.TS: 'http://frontts:3000/to/native/ts/ast',
@@ -114,6 +121,9 @@ TO_QUERY_ENGINE_URL = 'http://queryengine:5000/check'
 # pylint: disable=unused-argument
 def scan_this_file(filename: str, language: Language, ignore_testing_code: bool = False) -> bool:
     if ignore_testing_code and '/test/' in filename:
+        return False
+
+    if ignore_testing_code and '.test.' in filename:
         return False
 
     return True
@@ -206,7 +216,7 @@ def add_php_asts(files: dict[Language, list[str]], asts: dict) -> None:
             cookies=cookies
         )
 
-        if filename.endswith('resources/views/components/favicon.blade.php'):
+        if filename.endswith('app/Http/Controllers/AdminController.php'):
             logging.info(response.text)
 
         asts[Language.PHP].append({
@@ -220,9 +230,6 @@ def add_ast(filename: str, language: Language, asts: dict, offsets: dict[str, di
     one_file_at_a_time = read_single_file(filename, offsets)
     response = requests.post(AST_BUILDER_URL[language], files=one_file_at_a_time)
     asts[language].append({ 'filename': filename, 'actual_ast': response.text })
-
-    #if filename.endswith('trunk/research/api-server/server.go'):
-    #    logging.info(response.text)
 
 def parse_code(files: dict[Language, list[str]], offsets: dict[str, dict[int, int]]) -> dict[Language, list[dict[str, str]]]:
 
@@ -247,9 +254,6 @@ def add_dhscanner_ast(filename: str, language: Language, code, asts) -> None:
     url = DHSCANNER_AST_BUILDER_URL[language]
     response = requests.post(f'{url}?filename={filename}', json=content)
     asts[language].append({ 'filename': filename, 'dhscanner_ast': response.text })
-
-    if filename.endswith('resources/views/components/favicon.blade.php'):
-        logging.info(response.text)
 
 def parse_language_asts(language_asts):
 
@@ -327,6 +331,40 @@ def sinkify(match: re.Match, filename: str, offsets: dict[str, dict[int, int]]) 
         )
 
     return None
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class Location:
+
+    filename: str
+    lineStart: int
+    lineEnd: int
+    colStart: int
+    colEnd: int
+
+    def __str__(self) -> str:
+        return f'[{self.lineStart}:{self.colStart}-{self.lineEnd}:{self.colEnd}]'
+
+    @staticmethod
+    def from_dict(candidate: dict) -> typing.Optional['Location']:
+
+        if 'filename' not in candidate:
+            return None
+        if 'lineStart' not in candidate:
+            return None
+        if 'lineEnd' not in candidate:
+            return None
+        if 'colStart' not in candidate:
+            return None
+        if 'colEnd' not in candidate:
+            return None
+
+        return Location(
+            filename=remove_tmp_prefix(candidate['filename']),
+            lineStart=candidate['lineStart'],
+            lineEnd=candidate['lineEnd'],
+            colStart=candidate['colStart'],
+            colEnd=candidate['colEnd']
+        )
 
 def restore(filename: str) -> str:
     return filename.replace('_slash_', '/').replace('_dot_', '.').replace('_dash_', '-')
@@ -434,6 +472,19 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     offsets: dict[str, dict[int, int]] = {}
     language_asts = parse_code(files, offsets)
 
+    if native_ast_filename := request.headers.get('X-Show-Native-Ast-For-File', None):
+        l = pathlib.Path(native_ast_filename).suffix.lstrip('.')
+        lang = Language.from_raw_str(l)
+        if lang and lang in language_asts:
+            asts = language_asts[lang]
+            for ast in asts:
+                if 'filename' in ast:
+                    candidate = remove_tmp_prefix(ast['filename'])
+                    if native_ast_filename == candidate:
+                        content = ast['actual_ast']
+                        logging.info(f'[ step 2 ] native ast of: {native_ast_filename}')
+                        logging.info(f'[ step 2 ] {content}')
+
     logging.info('[ step 2 ] native asts .......... : finished 😃 ')
 
     # before the entire working directory is deleted,
@@ -462,23 +513,23 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
     total_num_files: dict[Language, int] = collections.defaultdict(int)
     num_parse_errors: dict[Language, int] = collections.defaultdict(int)
 
+    locations: dict[str, Location] = {}
+
     for language, asts in dhscanner_asts.items():
         for ast in asts:
             try:
-                actual_ast = json.loads(ast['dhscanner_ast'])
-                if 'status' in actual_ast and 'filename' in actual_ast and actual_ast['status'] == 'FAILED':
+                result = json.loads(ast['dhscanner_ast'])
+                if 'status' in result and 'location' in result and result['status'] == 'FAILED':
                     num_parse_errors[language] += 1
                     total_num_files[language] += 1
-                    filename = actual_ast['filename']
-                    message = actual_ast['message']
-                    if filename.endswith('plugins/new_relic/lib/samson_new_relic/samson_plugin.rb'):
-                        logging.info(f'FAILED({message}): {filename}')
+                    if loc := Location.from_dict(result['location']):
+                        locations[loc.filename] = loc
                     continue
 
             except ValueError:
                 continue
 
-            valid_dhscanner_asts.append(actual_ast)
+            valid_dhscanner_asts.append(result)
             total_num_files[language] += 1
 
     for language in dhscanner_asts.keys():
@@ -486,10 +537,17 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         errors = num_parse_errors[language]
         logging.info(f'[ step 2 ] dhscanner ast ( {language.value:<3} )  : {n - errors}/{n}')
 
-    callables = codegen(valid_dhscanner_asts)
+    if parse_status_filename := request.headers.get('X-Show-Parse-Status-For-File', None):
+        logging.info(f'[ step 2 ] parse info: {parse_status_filename}')
+        if parse_status_filename in locations:
+            logging.info(f'[ step 2 ] parser error loc: {str(locations[parse_status_filename])}')
 
     logging.info('[ step 2 ] dhscanner asts ....... : finished 😃 ')
+    logging.info('[ step 3 ] code gen ............. : started  😃 ')
 
+    callables = codegen(valid_dhscanner_asts)
+
+    logging.info('[ step 3 ] code gen ............. : finished 😃 ')
     logging.info('[ step 4 ] knowledge base gen ... : started  😃 ')
 
     facts = []
