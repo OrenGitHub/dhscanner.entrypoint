@@ -566,10 +566,12 @@ async def scan(request: fastapi.Request, authorization: typing.Optional[str] = f
         dummy_callable = 'not_a_real_callable'
         dummy_annotation = "'not.a.real.fqn'"
         dummy_param_name = "'not_a_real_param_name'"
-        f.write(f'kb_class_name( {dummy_classloc}, {dummy_classname}).\n')
-        f.write(f'kb_subclass_of( {dummy_classloc}, {dummy_classname}).\n')
-        f.write(f'kb_callable_annotated_with({dummy_callable}, {dummy_annotation}).\n')
-        f.write(f'kb_callable_annotated_with_user_input_inside_route({dummy_callable}, {dummy_param_name}).\n')
+        dummy_param = 'not_a_real_param'
+        f.write(f'kb_class_name({dummy_classloc},{dummy_classname}).\n')
+        f.write(f'kb_subclass_of({dummy_classloc},{dummy_classname}).\n')
+        f.write(f'kb_callable_has_param({dummy_callable},{dummy_param}).\n')
+        f.write(f'kb_callable_annotated_with({dummy_callable},{dummy_annotation}).\n')
+        f.write(f'kb_callable_annotated_with_user_input_inside_route({dummy_callable},{dummy_param_name}).\n')
         f.write('\n'.join(sorted(set(facts))))
         f.write('\n')
 
